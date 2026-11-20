@@ -1,0 +1,21 @@
+name: clean-install
+on:
+  push:
+    branches: [test/clean-install]
+jobs:
+  t:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install "git+https://github.com/pamelahaji/medbr.git@main#subdirectory=python-package"
+      - run: |
+          cd /tmp && python - <<'PY'
+          import medbr, os
+          for n, f in [("beds rate", lambda: medbr.beds(rate=True)),
+                       ("plancoverage SP", lambda: medbr.plancoverage(ufs="SP", rate=True)),
+                       ("beneficiaries", lambda: medbr.beneficiaries(rate=True)),
+                       ("birth SJC", lambda: medbr.birth(cities_code=[354990], start_at="2022-01-01", end_at="2022-03-31", rate=True)),
+                       ("mortality SP", lambda: medbr.mortality(ufs="SP", start_at="2022-01-01", end_at="2022-01-31"))]:
+              m = f(); m.save("/tmp/x.html"); print("OK", n, round(os.path.getsize("/tmp/x.html")/1e6,2), "MB")
+          PY
