@@ -8,9 +8,10 @@ jobs:
     steps:
       - name: probe
         run: |
-          A='imunizacao_public:qlto5t&7r_@+#Tlstigi'
-          for ep in desc-imunizacao desc-vacinacao; do
-            echo "== $ep count"; curl -s -m 60 -u "$A" -H 'Content-Type: application/json' "https://imunizacao-es.saude.gov.br/$ep/_count" | head -c 400; echo
+          B=https://s3.sa-east-1.amazonaws.com/ckan.saude.gov.br
+          for p in "SIPNI/COVID/uf/" "SIPNI/COVID/completo/" "SIPNI/" "PNI/"; do
+            echo "== LIST $p"; curl -s -m 60 "$B/?list-type=2&prefix=$p&delimiter=/&max-keys=60" | python3 -c "
+          import sys,re
+          x=sys.stdin.read()
+          print(re.findall(r'<Key>([^<]+)</Key><LastModified>([^<]+)</LastModified><ETag>[^<]*</ETag><Size>(\d+)</Size>',x)[:40]); print(re.findall(r'<Prefix>([^<]+)</Prefix>',x)[:40]); print(x[:300] if '<Key>' not in x and '<Prefix>' not in x else '')"
           done
-          echo "== one doc"; curl -s -m 60 -u "$A" -H 'Content-Type: application/json' -d '{"size":1}' "https://imunizacao-es.saude.gov.br/desc-imunizacao/_search" | head -c 2500; echo
-          echo "== agg uf"; curl -s -m 120 -u "$A" -H 'Content-Type: application/json' -d '{"size":0,"track_total_hits":true,"aggs":{"uf":{"terms":{"field":"estabelecimento_uf","size":40}}}}' "https://imunizacao-es.saude.gov.br/desc-imunizacao/_search" | head -c 2500; echo
