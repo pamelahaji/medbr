@@ -106,3 +106,9 @@ def test_choropleths_zoom_to_the_data(data_dir):
 def test_vaccination_scale_is_capped(data_dir):
     html = medbr.vaccination("penta").get_root().render()
     assert "120" in html
+
+
+def test_filtered_heatmap_zooms_to_the_data(data_dir):
+    assert "fitBounds" in medbr.birth(ufs=["SP", "RJ"]).get_root().render()
+    assert "fitBounds" not in medbr.birth().get_root().render()
+    medbr.birth(cities_code=[111111])   # a single place: no degenerate bounds

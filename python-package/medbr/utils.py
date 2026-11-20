@@ -317,5 +317,11 @@ def temporal_heatmap(filename, date_col, count_col, cities_code=None, start_at=N
     time_index, frames = group_by_date(data, date_col, count_col, points)
 
     m = new_map(location=frames[0][0][:2])
+    if codes is not None or ufs is not None:  # filtered: zoom to the places shown
+        lats, lons = zip(*points.values())
+        if len(points) == 1:
+            m = new_map(location=[lats[0], lons[0]], zoom_start=10)
+        else:
+            m.fit_bounds([[min(lats), min(lons)], [max(lats), max(lons)]])
     HeatMapWithTime(frames, index=time_index, auto_play=False, use_local_extrema=True).add_to(m)
     return m
