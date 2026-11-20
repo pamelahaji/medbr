@@ -11,25 +11,10 @@ jobs:
           python3 - <<'PY'
           import ftplib, io
           f = ftplib.FTP("ftp.datasus.gov.br", timeout=60); f.login(); f.set_pasv(True)
-          for d in ["/dissemin/publicos/PNI/AUXILIAR", "/dissemin/publicos/PNI/DOCUMENTACAO", "/dissemin/publicos/PNI"]:
-              try: f.cwd(d); print("DIR", d, f.nlst()[:40])
-              except Exception as e: print("ERR", d, e)
-          def dbf(path_dir, name):
-              f.cwd(path_dir); b = io.BytesIO(); f.retrbinary("RETR "+name, b.write); data=b.getvalue()
-              n=int.from_bytes(data[4:8],"little"); hl=int.from_bytes(data[8:10],"little"); rl=int.from_bytes(data[10:12],"little")
-              fl=[]; p=32
-              while data[p]!=0x0D: fl.append((data[p:p+11].split(b"\0")[0].decode(), data[p+16])); p+=32
-              rows=[]
-              for i in range(n):
-                  r=data[hl+i*rl+1:hl+(i+1)*rl]; o=0; row={}
-                  for k,l in fl: row[k]=r[o:o+l].decode("latin1").strip(); o+=l
-                  rows.append(row)
-              return rows
-          rows = dbf("/dissemin/publicos/PNI/DADOS","CPNISP19.DBF")
-          print("CPNISP19 rows", len(rows)); 
-          import collections
-          print("IMUNO codes", sorted(set(r["IMUNO"] for r in rows)))
-          print("SAMPLE", [r for r in rows if r["MUNIC"]=="354990"][:40])
-          print("YEARS", [n for n in ftplib.FTP("ftp.datasus.gov.br").nlst("/dissemin/publicos/PNI/DADOS/CPNISP*")][:30] if False else "")
-          f.cwd("/dissemin/publicos/PNI/DADOS"); names=f.nlst(); print("SP files", sorted(n for n in names if "CPNISP" in n.upper()))
+          f.cwd("/dissemin/publicos/PNI/AUXILIARES"); names=f.nlst(); print("AUX", names)
+          f.cwd("/dissemin/publicos/PNI/DOCS"); print("DOCS", f.nlst())
+          f.cwd("/dissemin/publicos/PNI/AUXILIARES")
+          for n in names:
+              if "IMUNO" in n.upper() or "IMUN" in n.upper():
+                  b=io.BytesIO(); f.retrbinary("RETR "+n,b.write); d=b.getvalue(); print("FILE", n, len(d)); print(d[:3000].decode("latin1"))
           PY
