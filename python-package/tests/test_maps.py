@@ -41,6 +41,8 @@ def data_dir(tmp_path, monkeypatch):
     put("birth", pd.DataFrame({"city_code": [111111, 222222, 111111],
                                "birth_date": ["2021-01-01", "2021-01-01", "2021-01-02"],
                                "birth_count": [3, 4, 5]}))
+    put("vaccination", pd.DataFrame({"city_code": [111111, 222222, 111111], "vaccine": ["penta", "penta", "bcg"],
+                                     "doses": [90, 40, 100], "target_population": [100, 50, 100], "coverage": [90.0, 80.0, 100.0]}))
     put("mortality", pd.DataFrame({"city_code": [111111], "death_date": ["2021-01-01"], "death_count": [2]}))
 
 
@@ -56,6 +58,8 @@ def data_dir(tmp_path, monkeypatch):
     lambda: medbr.mortality(ufs="SP", rate=True),
     lambda: medbr.mortality(rate=True),
     lambda: medbr.beneficiaries(),
+    lambda: medbr.vaccination(),
+    lambda: medbr.vaccination("bcg", ufs="SP"),
     lambda: medbr.plancoverage(),
     lambda: medbr.plancoverage(ufs=["SP"], operators=[1]),
     lambda: medbr.birth(),
@@ -86,3 +90,8 @@ def test_city_centroids_inside_the_box(data_dir):
 
     c = city_centroids(get_cities(city_code=111111)).iloc[0]
     assert -24 < c.y < -23 and -47 < c.x < -46
+
+
+def test_vaccination_rejects_unknown_vaccine(data_dir):
+    with pytest.raises(ValueError, match="vaccine must be"):
+        medbr.vaccination("nope")

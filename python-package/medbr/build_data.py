@@ -15,9 +15,13 @@ Sources (downloaded to a temporary folder, only the result is kept):
               municipality of occurrence and day, fetal deaths excluded
 * birth       SINASC 2021-2022 (OpenDataSUS, ~110 MB zip per year); births by municipality of
               occurrence and day
+* vaccination  SI-PNI routine immunisation coverage by municipality (DATASUS FTP, ``CPNI<UF><yy>.DBF``);
+              the last complete year is used (see ``PNI_YEAR``)
 * beds        CNES "Leitos 2023" (OpenDataSUS); existing beds by state in the latest month of the file
 """
 import argparse
+import ftplib
+import io
 import json
 import shutil
 import tempfile
@@ -46,6 +50,18 @@ SINASC_URL = S3 + "/SINASC/csv/SINASC_{year}_csv.zip"
 BEDS_URL = S3 + "/Leitos_SUS/Leitos_{year}.csv"
 YEARS = (2021, 2022)
 BEDS_YEAR = 2023
+PNI_HOST, PNI_DIR = "ftp.datasus.gov.br", "/dissemin/publicos/PNI/DADOS"
+# 2019 is incomplete in the FTP (reporting moved to the new SI-PNI/e-SUS APS and many municipalities
+# stopped being counted), so 2018 is the last year with reliable coverage.
+PNI_YEAR = 2018
+# immunobiological code in the PNI files -> (key used by medbr.vaccination, label)
+VACCINES = {
+    "072": ("bcg", "BCG"), "073": ("hepatitis_b", "Hepatitis B"), "061": ("rotavirus", "Rotavirus"),
+    "053": ("meningococcal_c", "Meningococcal C"), "080": ("penta", "Pentavalent"),
+    "012": ("pneumococcal", "Pneumococcal"), "074": ("polio", "Poliomyelitis"),
+    "006": ("yellow_fever", "Yellow fever"), "096": ("hepatitis_a", "Hepatitis A"),
+    "021": ("mmr_d1", "MMR dose 1"), "098": ("mmr_d2", "MMR dose 2"), "097": ("tetra_viral", "Tetra viral"),
+}
 
 
 def download(url, dest, timeout=600):
@@ -203,6 +219,50 @@ def _from_yearly_zips(url_template, summarize, date_col, count_col, tmp):
     return combine_daily(frames, date_col, count_col)
 
 
+# ---------------------------------------------------------------- vaccination (SI-PNI)
+def fetch_ftp(host, directory, names, timeout=120):
+    """Bytes of the first of ``names`` found in an FTP directory (DATASUS mixes ``.DBF``/``.dbf``)."""
+    with ftplib.FTP(host, timeout=timeout) as ftp:
+        ftp.login()
+        ftp.cwd(directory)
+        for name in names:
+            buffer = io.BytesIO()
+            try:
+                ftp.retrbinary("RETR " + name, buffer.write)
+            except ftplib.error_perm:
+                continue
+            return buffer.getvalue()
+    raise FileNotFoundError(f"{names} not found in ftp://{host}{directory}")
+
+
+def summarize_coverage(df):
+    """CPNI table (one row per municipality and immunobiological) -> city_code, vaccine, coverage.
+
+    ``COBERT`` is the official coverage in % (comma decimal, e.g. ``',03'``); only the vaccines in
+    ``VACCINES`` are kept.
+    """
+    df = df[df["IMUNO"].isin(VACCINES)].copy()
+    df["city_code"] = df["MUNIC"].astype(str).str[:6]
+    df["vaccine"] = df["IMUNO"].map(lambda code: VACCINES[code][0])
+    df["doses"] = pd.to_numeric(df["QT_DOSE"], errors="coerce")
+    df["target_population"] = pd.to_numeric(df["POP"], errors="coerce")
+    df["coverage"] = pd.to_numeric(df["COBERT"].str.replace(",", ".", regex=False), errors="coerce")
+    return df[["city_code", "vaccine", "doses", "target_population", "coverage"]].reset_index(drop=True)
+
+
+def build_vaccination(year=PNI_YEAR):
+    from medbr.dbf import read_dbf
+    from medbr.population import UF_CODES
+
+    yy = str(year)[-2:]
+    frames = []
+    for uf in UF_CODES.values():
+        names = [f"CPNI{uf}{yy}.DBF", f"CPNI{uf}{yy}.dbf"]
+        frames.append(summarize_coverage(read_dbf(fetch_ftp(PNI_HOST, PNI_DIR, names))))
+    out = pd.concat(frames, ignore_index=True)
+    return _write_csv(out, "vaccination", "transformed", "vaccination.csv"), out
+
+
 # ---------------------------------------------------------------- builders (registered)
 @dataset("cities", "IBGE municipal mesh 2022 (simplified) and the states file")
 def build_cities_dataset(tmp, simplify):
@@ -254,6 +314,13 @@ def build_beds_dataset(tmp, simplify):
     print("beds: CNES ...", flush=True)
     df, month = summarize_beds(download(BEDS_URL.format(year=BEDS_YEAR), tmp / "beds.csv"))
     print("  ->", _write_csv(df, "beds", "transformed", "beds.csv"), f"(month {month}, {int(df.beds_count.sum())} beds)")
+
+
+@dataset("vaccination", "Routine vaccination coverage by municipality, 2018 (SI-PNI, DATASUS FTP)")
+def build_vaccination_dataset(tmp, simplify):
+    print("vaccination: DATASUS FTP ...", flush=True)
+    path, out = build_vaccination()
+    print("  ->", path, f"({out.city_code.nunique()} municipalities, {out.vaccine.nunique()} vaccines)")
 
 
 # ---------------------------------------------------------------- driver

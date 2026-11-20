@@ -6,15 +6,27 @@ jobs:
   p:
     runs-on: ubuntu-latest
     steps:
-      - name: probe
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install -e python-package
+      - name: build + sanity
+        env:
+          MEDBR_DATA_DIR: ${{ github.workspace }}/data-build
+          MEDBR_NO_DOWNLOAD: "1"
         run: |
-          python3 - <<'PY'
-          import ftplib, io
-          f = ftplib.FTP("ftp.datasus.gov.br", timeout=60); f.login(); f.set_pasv(True)
-          f.cwd("/dissemin/publicos/PNI/AUXILIARES"); names=f.nlst(); print("AUX", names)
-          f.cwd("/dissemin/publicos/PNI/DOCS"); print("DOCS", f.nlst())
-          f.cwd("/dissemin/publicos/PNI/AUXILIARES")
-          for n in names:
-              if "IMUNO" in n.upper() or "IMUN" in n.upper():
-                  b=io.BytesIO(); f.retrbinary("RETR "+n,b.write); d=b.getvalue(); print("FILE", n, len(d)); print(d[:3000].decode("latin1"))
+          python -m medbr.build_data --only cities vaccination
+          python - <<'PY'
+          import os, medbr
+          from medbr.build_data import build_vaccination
+          import pandas as pd
+          for year in (2018, 2019):
+              _, out = build_vaccination(year)
+              g = out.groupby("vaccine").agg(doses=("doses","sum"), pop=("target_population","sum"), n=("city_code","nunique"))
+              g["national_coverage"] = (g.doses / g["pop"] * 100).round(1)
+              print("SANITY", year); print(g.to_string())
+              print("COBERT>150:", int((out.coverage>150).sum()), "NaN:", int(out.coverage.isna().sum()), "rows", len(out))
+          build_vaccination(2018)
+          for name, fn in [("penta", lambda: medbr.vaccination("penta")), ("bcg SP", lambda: medbr.vaccination("bcg", ufs="SP"))]:
+              m = fn(); m.save("/tmp/x.html"); print("MAP", name, round(os.path.getsize("/tmp/x.html")/1e6,2), "MB")
           PY
