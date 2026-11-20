@@ -1,0 +1,27 @@
+name: smoke
+on:
+  push:
+    branches: [test/smoke]
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - name: Clean install from main
+        run: pip install "git+https://github.com/pamelahaji/medbr.git@main#subdirectory=python-package"
+      - name: Live checks
+        run: |
+          python - <<'PY'
+          import traceback, medbr
+          from medbr.population import population
+          def run(name, fn):
+              try:
+                  r = fn(); print("OK  ", name, r if not hasattr(r, "get_root") else "map")
+              except Exception as e:
+                  print("FAIL", name, type(e).__name__, str(e)[:300])
+          run("population uf", lambda: len(population("uf")))
+          run("population city", lambda: len(population("city")))
+          run("facilities SP", lambda: medbr.facilities(city=355030).get_root().render()[:20])
+          run("bundle (beds)", lambda: medbr.beds())
+          PY
