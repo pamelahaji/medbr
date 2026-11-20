@@ -8,10 +8,24 @@ jobs:
     steps:
       - name: probe
         run: |
-          B=https://s3.sa-east-1.amazonaws.com/ckan.saude.gov.br
-          for p in "SIPNI/COVID/uf/" "SIPNI/COVID/completo/" "SIPNI/" "PNI/"; do
-            echo "== LIST $p"; curl -s -m 60 "$B/?list-type=2&prefix=$p&delimiter=/&max-keys=60" | python3 -c "
-          import sys,re
-          x=sys.stdin.read()
-          print(re.findall(r'<Key>([^<]+)</Key><LastModified>([^<]+)</LastModified><ETag>[^<]*</ETag><Size>(\d+)</Size>',x)[:40]); print(re.findall(r'<Prefix>([^<]+)</Prefix>',x)[:40]); print(x[:300] if '<Key>' not in x and '<Prefix>' not in x else '')"
-          done
+          python3 - <<'PY'
+          import ftplib, io
+          try:
+              f = ftplib.FTP("ftp.datasus.gov.br", timeout=60); f.login(); f.set_pasv(True)
+              for d in ["/dissemin/publicos/PNI/DADOS", "/dissemin/publicos/PNI"]:
+                  try:
+                      f.cwd(d); names = f.nlst(); print("DIR", d, len(names), names[:12], [n for n in names if "SP19" in n.upper() or "AC19" in n.upper()])
+                      break
+                  except Exception as e: print("ERR", d, e)
+              for n in ["DPNIAC19.DBF","CPNIAC19.DBF","DPNIAC19.dbc","CPNIAC19.dbc"]:
+                  try:
+                      b = io.BytesIO(); f.retrbinary("RETR "+n, b.write); data = b.getvalue(); print("GOT", n, len(data), data[:32].hex())
+                      nrec = int.from_bytes(data[4:8],"little"); hl = int.from_bytes(data[8:10],"little"); rl = int.from_bytes(data[10:12],"little")
+                      fields=[]; p=32
+                      while data[p]!=0x0D:
+                          fields.append((data[p:p+11].split(b"\0")[0].decode(), chr(data[p+11]), data[p+16])); p+=32
+                      print("FIELDS", fields, "nrec", nrec)
+                      for i in range(3): print("ROW", data[hl+i*rl:hl+(i+1)*rl][:80])
+                  except Exception as e: print("ERR", n, e)
+          except Exception as e: print("FTP FAIL", e)
+          PY
