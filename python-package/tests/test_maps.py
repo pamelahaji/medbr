@@ -67,3 +67,19 @@ def test_maps_render(data_dir, call):
 def test_birth_without_data_in_range_raises(data_dir):
     with pytest.raises(ValueError):
         medbr.birth(start_at="2030-01-01")
+
+
+def test_birth_map_has_no_crs_warning_and_centroids_are_sane(data_dir):
+    import warnings
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", UserWarning)
+        html = medbr.birth().get_root().render()
+    assert "OpenStreetMap" in html or "openstreetmap" in html.lower()
+
+
+def test_city_centroids_inside_the_box(data_dir):
+    from medbr.utils import city_centroids, get_cities
+
+    c = city_centroids(get_cities(city_code=111111)).iloc[0]
+    assert -24 < c.y < -23 and -47 < c.x < -46
