@@ -34,6 +34,10 @@ def data_dir(tmp_path, monkeypatch):
     put("beds", pd.DataFrame({"uf": ["SP", "RJ"], "beds_count": [10, 5]}))
     put("beneficiaries", pd.DataFrame({"uf": ["SP", "RJ"], "beneficiaries_count": [100, 50]}))
     put("plancoverage", pd.DataFrame({"city_code": [111111, 222222], "operator": [1, 2], "count": [4, 6]}))
+    pop_dir = tmp_path / "population" / "transformed"
+    pop_dir.mkdir(parents=True)
+    pd.DataFrame({"code": ["SP", "RJ"], "population": [1000, 500]}).to_csv(pop_dir / "population_uf.csv", sep=";", index=False)
+    pd.DataFrame({"code": ["111111", "222222"], "population": [1000, 2000]}).to_csv(pop_dir / "population_city.csv", sep=";", index=False)
     put("birth", pd.DataFrame({"city_code": [111111, 222222, 111111],
                                "birth_date": ["2021-01-01", "2021-01-01", "2021-01-02"],
                                "birth_count": [3, 4, 5]}))
@@ -43,6 +47,11 @@ def data_dir(tmp_path, monkeypatch):
 @pytest.mark.parametrize("call", [
     lambda: medbr.beds(),
     lambda: medbr.beds(ufs=["SP"]),
+    lambda: medbr.beds(rate=True),
+    lambda: medbr.beneficiaries(rate=True),
+    lambda: medbr.plancoverage(rate=True),
+    lambda: medbr.birth(rate=True),
+    lambda: medbr.mortality(rate=True),
     lambda: medbr.beneficiaries(),
     lambda: medbr.plancoverage(),
     lambda: medbr.plancoverage(ufs=["SP"], operators=[1]),

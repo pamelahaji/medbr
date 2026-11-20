@@ -12,11 +12,19 @@ def plancoverage_data(data, operators=None):
     return data.groupby("city_code")["count"].sum()
 
 
-def plancoverage(ufs=None, operators=None):
+def plancoverage(ufs=None, operators=None, rate=False):
     """Number of health plans sold by municipality.
 
     ufs: state abbreviation (or list); default: all states.
     operators: operator code (or list); default: all operators.
+    rate: if True, show plans per 100,000 inhabitants (Census 2022).
     """
     data = read_data("plancoverage", "transformed", "plancoverage.csv")
-    return colormap_create(plancoverage_data(data, operators), ufs=ufs)
+    series = plancoverage_data(data, operators)
+    caption = "Health plans"
+    if rate:
+        from medbr.population import population, to_rate
+
+        series = to_rate(series, population("city"), 100_000)
+        caption = "Health plans per 100,000 inhabitants"
+    return colormap_create(series, ufs=ufs, caption=caption)
