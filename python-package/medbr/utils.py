@@ -208,8 +208,28 @@ def new_map(location=None, zoom_start=None):
     )
 
 
-def colormap_create(data, ufs=None, caption=None):
-    """Choropleth by municipality. ``data`` is a Series indexed by city_code (str)."""
+def _geojson_bounds(features):
+    """[[south, west], [north, east]] of the GeoJSON features (folium order)."""
+    xs, ys = [], []
+
+    def walk(coords):
+        if coords and isinstance(coords[0], (int, float)):
+            xs.append(coords[0]); ys.append(coords[1])
+        else:
+            for c in coords:
+                walk(c)
+
+    for feature in features:
+        walk(feature["geometry"]["coordinates"])
+    return [[min(ys), min(xs)], [max(ys), max(xs)]]
+
+
+def colormap_create(data, ufs=None, caption=None, vmin=None, vmax=None):
+    """Choropleth by municipality. ``data`` is a Series indexed by city_code (str).
+
+    The map zooms to the municipalities shown. ``vmin``/``vmax`` fix the colour scale (values
+    outside are drawn with the end colours); by default it goes from the minimum to the maximum.
+    """
     import folium
     from branca.colormap import linear
 
@@ -220,8 +240,10 @@ def colormap_create(data, ufs=None, caption=None):
     if len(cities) == 0:
         raise ValueError("No data found.")
 
-    colormap = linear.YlOrRd_09.scale(data.min(), data.max())
+    colormap = linear.YlOrRd_09.scale(data.min() if vmin is None else vmin, data.max() if vmax is None else vmax)
     m = new_map()
+    minx, miny, maxx, maxy = cities.total_bounds
+    m.fit_bounds([[miny, minx], [maxy, maxx]])
     folium.GeoJson(
         cities[["geometry", "count"]].to_json(),
         name="count",
@@ -237,8 +259,8 @@ def colormap_create(data, ufs=None, caption=None):
     return m
 
 
-def colormap_create_uf(data, caption=None):
-    """Choropleth by state. ``data`` is a Series indexed by UF (e.g. ``SP``)."""
+def colormap_create_uf(data, caption=None, vmin=None, vmax=None):
+    """Choropleth by state. ``data`` is a Series indexed by UF (e.g. ``SP``); zooms to the states shown."""
     import folium
     from branca.colormap import linear
 
@@ -250,8 +272,9 @@ def colormap_create_uf(data, caption=None):
     if not geo_json_data["features"]:
         raise ValueError("No data found.")
 
-    colormap = linear.YlOrRd_09.scale(data.min(), data.max())
+    colormap = linear.YlOrRd_09.scale(data.min() if vmin is None else vmin, data.max() if vmax is None else vmax)
     m = new_map()
+    m.fit_bounds(_geojson_bounds(geo_json_data["features"]))
     folium.GeoJson(
         geo_json_data,
         name="count",
@@ -294,5 +317,11 @@ def temporal_heatmap(filename, date_col, count_col, cities_code=None, start_at=N
     time_index, frames = group_by_date(data, date_col, count_col, points)
 
     m = new_map(location=frames[0][0][:2])
+    if codes is not None or ufs is not None:  # filtered: zoom to the places shown
+        lats, lons = zip(*points.values())
+        if len(points) == 1:
+            m = new_map(location=[lats[0], lons[0]], zoom_start=10)
+        else:
+            m.fit_bounds([[min(lats), min(lons)], [max(lats), max(lons)]])
     HeatMapWithTime(frames, index=time_index, auto_play=False, use_local_extrema=True).add_to(m)
     return m

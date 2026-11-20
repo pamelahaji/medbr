@@ -21,7 +21,8 @@ def vaccination(vaccine="penta", ufs=None):
     ufs: state abbreviation (or list); default: all.
 
     The value is the official coverage (doses applied / target population of the vaccine, by
-    municipality of residence): it can exceed 100% because of denominator and registration issues.
+    municipality of residence): it can exceed 100% because of denominator and registration issues,
+    so the colour scale is fixed at 0-120% (higher values get the darkest colour).
     Coverage is a percentage, so there is no ``rate`` option.
     """
     if vaccine not in LABELS:
@@ -29,4 +30,5 @@ def vaccination(vaccine="penta", ufs=None):
     data = read_data("vaccination", "transformed", "vaccination.csv", dtype={"city_code": str})
     data = data[data["vaccine"] == vaccine].dropna(subset=["coverage"])
     series = city_series(data, "coverage")
-    return colormap_create(series, ufs=ufs, caption=f"{LABELS[vaccine]} coverage (%), 2018")
+    caption = f"{LABELS[vaccine]} coverage (%), 2018 (scale capped at 120%)"
+    return colormap_create(series, ufs=ufs, caption=caption, vmin=0, vmax=120)
