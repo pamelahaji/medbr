@@ -1,0 +1,32 @@
+name: figs
+on:
+  push:
+    branches: [figs]
+permissions:
+  contents: write
+jobs:
+  f:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install "git+https://github.com/pamelahaji/medbr.git@main#subdirectory=python-package" playwright
+      - run: python -m playwright install --with-deps chromium
+      - run: |
+          mkdir -p out && cd /tmp && python - <<'PY'
+          import medbr
+          from playwright.sync_api import sync_playwright
+          maps = {"fig_beds": medbr.beds(rate=True), "fig_penta_sp": medbr.vaccination("penta", ufs="SP")}
+          with sync_playwright() as p:
+              b = p.chromium.launch(); pg = b.new_page(viewport={"width": 900, "height": 700})
+              for name, m in maps.items():
+                  m.save(f"/tmp/{name}.html"); pg.goto(f"file:///tmp/{name}.html"); pg.wait_for_timeout(8000)
+                  pg.screenshot(path=f"/tmp/{name}.png"); print("OK", name)
+              b.close()
+          PY
+          cp /tmp/fig_*.png "$GITHUB_WORKSPACE/out/"
+      - run: |
+          git config user.name "github-actions"; git config user.email "actions@github.com"
+          git checkout -q --orphan figs-out; git rm -rq --cached . ; git add -f out/*.png
+          git commit -qm "figures" && git push -f origin figs-out
