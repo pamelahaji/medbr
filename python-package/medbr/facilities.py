@@ -1,11 +1,6 @@
-import geopandas as gpd
-import folium
-import webbrowser
-import pandas as pd
 import json
-import functools 
-import numpy as np
 
+import numpy as np
 
 from medbr.utils import uri_request, uri_creator, remove_nil, map_create
 

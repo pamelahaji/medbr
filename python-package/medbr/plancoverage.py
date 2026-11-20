@@ -1,24 +1,22 @@
-import pandas as pd
+from medbr.utils import colormap_create, read_data, as_list
 
-from medbr.utils import colormap_create
 
-DATAPATH = 'medbr/data/plancoverage/transformed/plancoverage.csv'
-
-def plancoverage(ufs, operators=None):
-    
-    data = pd.read_csv(DATAPATH, sep=';')
-
-    # cities = get_cities(ufs=ufs)
-    # data = pd.merge(data, cities, how='inner', on='city_code')
-
+def plancoverage_data(data, operators=None):
+    """Plans per municipality, optionally restricted to some operators."""
+    operators = as_list(operators)
     if operators is not None:
-        data = data[data['operators'].isin(operators)]
-    
-    data.city_code = data.city_code.astype(str)
-    data = data[['city_code', 'count']]
+        data = data[data["operator"].isin(operators)]
+    if len(data) == 0:
+        raise ValueError("No data found.")
+    data = data.assign(city_code=data["city_code"].astype(str))
+    return data.groupby("city_code")["count"].sum()
 
-    data = data.groupby('city_code').sum('count').reset_index()
-    data = data.set_index('city_code')['count']
 
-    return colormap_create(data, ufs=ufs)
+def plancoverage(ufs=None, operators=None):
+    """Number of health plans sold by municipality.
 
+    ufs: state abbreviation (or list); default: all states.
+    operators: operator code (or list); default: all operators.
+    """
+    data = read_data("plancoverage", "transformed", "plancoverage.csv")
+    return colormap_create(plancoverage_data(data, operators), ufs=ufs)
