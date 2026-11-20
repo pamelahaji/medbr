@@ -16,11 +16,41 @@ REQUEST_TIMEOUT = 30
 def data_dir():
     """Return the folder that holds the medbr data sets.
 
-    Defaults to the ``data`` folder inside the package. Set the environment
-    variable ``MEDBR_DATA_DIR`` to use another location.
+    Order: ``MEDBR_DATA_DIR`` (if set); the ``data`` folder inside the package
+    when it already has the municipal mesh (development checkout); otherwise a
+    per-user cache folder (``~/.cache/medbr``), where the data bundle is
+    downloaded on first use.
     """
     env = os.environ.get("MEDBR_DATA_DIR")
-    return Path(env) if env else Path(__file__).resolve().parent / "data"
+    if env:
+        return Path(env)
+    local = Path(__file__).resolve().parent / "data"
+    if (local / "cities" / "transformed" / "cities.shp").exists():
+        return local
+    cache = os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache"
+    return Path(cache) / "medbr"
+
+
+def ensure_data(*parts):
+    """Return the path of a data file, downloading the data bundle if it is missing."""
+    from medbr import download
+
+    path = data_path(*parts)
+    if path.exists():
+        return path
+    reason = "automatic download is disabled (MEDBR_NO_DOWNLOAD)"
+    if download.downloads_enabled():
+        try:
+            download.fetch_bundle(data_dir())
+            if path.exists():
+                return path
+            reason = "the downloaded bundle does not contain this file"
+        except Exception as exc:  # network error, 404 (bundle not published yet), bad zip...
+            reason = f"download failed: {exc}"
+    raise FileNotFoundError(
+        f"Data file not found: {path} ({reason}). See README, section "
+        "'Preparing the data', or set MEDBR_DATA_DIR."
+    )
 
 
 def data_path(*parts):
@@ -30,13 +60,7 @@ def data_path(*parts):
 
 def read_data(*parts, **kwargs):
     """Read a transformed CSV (``;`` separated) with a clear error if it is missing."""
-    path = data_path(*parts)
-    if not path.exists():
-        raise FileNotFoundError(
-            f"Data file not found: {path}. Run the aggregator script of this "
-            "data set (see README, section 'Preparing the data') or set MEDBR_DATA_DIR."
-        )
-    return pd.read_csv(path, sep=";", **kwargs)
+    return pd.read_csv(ensure_data(*parts), sep=";", **kwargs)
 
 
 def uri_request(uris, params, request_type="get", auth=None):
@@ -146,12 +170,7 @@ def get_cities(ufs=None, city_name=None, city_code=None):
     """Municipalities as a GeoDataFrame (``city_code`` is always a string)."""
     import geopandas as gpd
 
-    path = data_path("cities", "transformed", "cities.shp")
-    if not path.exists():
-        raise FileNotFoundError(
-            f"Data file not found: {path}. Run medbr/data/cities/cities.py (see README)."
-        )
-    cities = gpd.read_file(path)
+    cities = gpd.read_file(ensure_data("cities", "transformed", "cities.shp"))
     cities["city_code"] = cities["city_code"].astype(str)
 
     if city_name is not None:
@@ -174,7 +193,7 @@ def new_map(location=None, zoom_start=None):
     )
 
 
-def colormap_create(data, ufs=None):
+def colormap_create(data, ufs=None, caption=None):
     """Choropleth by municipality. ``data`` is a Series indexed by city_code (str)."""
     import folium
     from branca.colormap import linear
@@ -197,19 +216,18 @@ def colormap_create(data, ufs=None):
             "weight": 0.3,
         },
     ).add_to(m)
+    if caption:
+        colormap.caption = caption
     colormap.add_to(m)
     return m
 
 
-def colormap_create_uf(data):
+def colormap_create_uf(data, caption=None):
     """Choropleth by state. ``data`` is a Series indexed by UF (e.g. ``SP``)."""
     import folium
     from branca.colormap import linear
 
-    path = data_path("cities", "raw", "br_states.json")
-    if not path.exists():
-        raise FileNotFoundError(f"Data file not found: {path} (see README).")
-    with open(path, encoding="utf-8") as f:
+    with open(ensure_data("cities", "raw", "br_states.json"), encoding="utf-8") as f:
         geo_json_data = json.load(f)
 
     # keep only the states present in the data
@@ -228,12 +246,18 @@ def colormap_create_uf(data):
             "weight": 0.3,
         },
     ).add_to(m)
+    if caption:
+        colormap.caption = caption
     colormap.add_to(m)
     return m
 
 
-def temporal_heatmap(filename, date_col, count_col, cities_code=None, start_at=None, end_at=None):
-    """Time heat map of daily counts by municipality (used by birth and mortality)."""
+def temporal_heatmap(filename, date_col, count_col, cities_code=None, start_at=None, end_at=None,
+                     rate=False, per=100_000):
+    """Time heat map of daily counts by municipality (used by birth and mortality).
+
+    With ``rate=True`` the intensity is the daily count per ``per`` inhabitants.
+    """
     from folium.plugins import HeatMapWithTime
 
     data = read_data(*filename, dtype={"city_code": str})
@@ -241,6 +265,10 @@ def temporal_heatmap(filename, date_col, count_col, cities_code=None, start_at=N
     if codes is not None:
         data = data[data["city_code"].isin(codes)]
     data = filter_dates(data, date_col, start_at, end_at)
+    if rate:
+        from medbr.population import population, add_rate
+
+        data = add_rate(data, population("city"), count_col, per)
 
     cities = get_cities(city_code=sorted(data["city_code"].unique()))
     centroids = cities.geometry.centroid
