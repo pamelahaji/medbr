@@ -43,16 +43,22 @@ Useful environment variables:
 | `MEDBR_NO_DOWNLOAD=1` | never download; fail with a clear message if a file is missing |
 | `MEDBR_BUNDLE_URL` | download the bundle from another address |
 
-### Rebuilding the data from the raw files (maintainers)
+### Building the data from the official sources
 
-1. Download the raw files into `medbr/data/<dataset>/raw/` (file names are in each `*_aggregator.py`; the municipal mesh is IBGE's `BR_Municipios_2022.shp`; the states file is `medbr/data/cities/raw/br_states.json`).
-2. Run the scripts, e.g. `python medbr/data/cities/cities.py` (paths do not depend on the current directory).
-3. Build and publish the bundle:
+`python -m medbr.build_data` downloads and prepares, straight from the official sources:
 
-```bash
-python -m medbr.bundle --simplify 0.005 --out medbr-data.zip   # --simplify shrinks the municipal mesh
-gh release create data-v1 medbr-data.zip --title "medbr data v1"
-```
+| Data set | Source |
+|---|---|
+| municipal mesh and states | IBGE municipal mesh 2022 (203 MB, simplified to ~5 MB) |
+| population | IBGE SIDRA, Census 2022 |
+| beneficiaries, plans | ANS open data (latest quarter; ~1 GB for the plans file) |
+| deaths | SIM "Mortalidade Geral" 2021-2022 (OpenDataSUS), non-fetal deaths |
+| births | SINASC 2021-2022 (OpenDataSUS) |
+| beds | CNES "Leitos 2023" (OpenDataSUS), latest month of the file |
+
+Use `--only cities population` to choose and `--bundle medbr-data.zip` to also write the zip. The whole build downloads about 2 GB, so it is meant to run on GitHub: the **build-data** Action does it and can publish the result as the `data-v1` release that `medbr` downloads (Actions → build-data → *Run workflow*, check *publish*).
+
+To fetch a newer bundle: `python -m medbr.download`.
 
 # Counts or rates?
 
@@ -61,9 +67,11 @@ By default the maps show **absolute counts**, so populous places look more inten
 | Function | `rate=True` shows |
 |---|---|
 | `beds` | beds per 1,000 inhabitants (by state) |
-| `beneficiaries` | beneficiaries per 100 inhabitants (by state, latest quarter) |
+| `beneficiaries` | medical-plan beneficiaries per 100 inhabitants (by state, latest quarter) |
 | `plancoverage` | plans per 100,000 inhabitants (by city) |
 | `birth`, `mortality` | daily births/deaths per 100,000 inhabitants (by city) |
+
+For `birth` and `mortality`, filter by `ufs`/`cities_code` and dates: the whole country over two years is a very large map.
 
 Caveats: births and deaths are counted by the city where they **occurred**, not where the person lives, so cities with large hospitals are over-represented; one census population is used as the denominator for all years.
 
@@ -93,9 +101,13 @@ More examples in [`python-package/examples/run_all.py`](python-package/examples/
 |`medbr.mortality(cities_code, start_at, end_at, rate)`| Population Health | Time heat map of deaths per day by city (2021-2022) | SIM |
 |`medbr.birth(cities_code, start_at, end_at, rate)`| Population Health | Time heat map of births per day by city (2021-2022) | SINASC |
 |`medbr.plancoverage(ufs, operators, rate)`| Complementary Health | Choropleth of health plans sold by city | ANS |
-|`medbr.beneficiaries(ufs, rate)`| Complementary Health | Choropleth of supplementary health beneficiaries by state | ANS |
+|`medbr.beneficiaries(ufs, rate, kind)`| Complementary Health | Choropleth of supplementary health beneficiaries by state (latest quarter); `kind`: `medical` (default), `dental`, `all` | ANS |
 
 Under development (not exported yet): COVID-19 vaccination (`covid_vaccine`) and sanitation (`sanitation`).
+
+# Adding data sets
+
+The package is built to grow: a data set is a registered *builder* (download + prepare), one line to get its map function (`uf_choropleth`, `city_choropleth`, `daily_heatmap`) and a test. `python -m medbr.build_data` and the release bundle pick it up automatically. See the [guide](CONTRIBUTING.md).
 
 # Contributing to medbr
 If you would like to contribute to medbr and add new functions or data sets, please check the [guide](CONTRIBUTING.md) to propose your contribution.

@@ -32,7 +32,11 @@ def data_dir():
 
 
 def ensure_data(*parts):
-    """Return the path of a data file, downloading the data bundle if it is missing."""
+    """Return the path of a data file, downloading the data bundle if it is missing.
+
+    The bundle is downloaded at most once (a marker file remembers it); use
+    ``python -m medbr.download`` to fetch a newer one.
+    """
     from medbr import download
 
     path = data_path(*parts)
@@ -40,16 +44,19 @@ def ensure_data(*parts):
         return path
     reason = "automatic download is disabled (MEDBR_NO_DOWNLOAD)"
     if download.downloads_enabled():
-        try:
-            download.fetch_bundle(data_dir())
-            if path.exists():
-                return path
-            reason = "the downloaded bundle does not contain this file"
-        except Exception as exc:  # network error, 404 (bundle not published yet), bad zip...
-            reason = f"download failed: {exc}"
+        if download.bundle_marker().exists():
+            reason = "the downloaded bundle does not contain this file (it was already downloaded)"
+        else:
+            try:
+                download.update_data()
+                if path.exists():
+                    return path
+                reason = "the downloaded bundle does not contain this file"
+            except Exception as exc:  # network error, 404 (bundle not published yet), bad zip...
+                reason = f"download failed: {exc}"
     raise FileNotFoundError(
-        f"Data file not found: {path} ({reason}). See README, section "
-        "'Preparing the data', or set MEDBR_DATA_DIR."
+        f"Data file not found: {path} ({reason}). See README, section 'Data', "
+        "or set MEDBR_DATA_DIR."
     )
 
 
@@ -261,7 +268,7 @@ def colormap_create_uf(data, caption=None):
 
 
 def temporal_heatmap(filename, date_col, count_col, cities_code=None, start_at=None, end_at=None,
-                     rate=False, per=100_000):
+                     rate=False, per=100_000, ufs=None):
     """Time heat map of daily counts by municipality (used by birth and mortality).
 
     With ``rate=True`` the intensity is the daily count per ``per`` inhabitants.
@@ -272,6 +279,8 @@ def temporal_heatmap(filename, date_col, count_col, cities_code=None, start_at=N
     codes = as_code_list(cities_code)
     if codes is not None:
         data = data[data["city_code"].isin(codes)]
+    if ufs is not None:
+        data = data[data["city_code"].isin(get_cities(ufs=ufs)["city_code"])]
     data = filter_dates(data, date_col, start_at, end_at)
     if rate:
         from medbr.population import population, add_rate

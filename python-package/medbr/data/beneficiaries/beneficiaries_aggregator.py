@@ -10,11 +10,13 @@ agg_file.parent.mkdir(exist_ok=True)
 latest = 'tb_br_2306.csv'
 df = pd.read_csv(HERE / 'raw' / latest, sep=';')
 
-df = df[['SG_UF', 'NR_BENEF_T']].groupby(['SG_UF']).sum().reset_index()
+df = df[['SG_UF', 'NR_BENEF_T', 'NR_BENEF_M', 'NR_BENEF_O']].groupby(['SG_UF']).sum().reset_index()
 
 df = df.rename(columns={
     "SG_UF": "uf",
-    "NR_BENEF_T": "beneficiaries_count"
+    "NR_BENEF_T": "beneficiaries_count",  # medical + dental (a person can count twice)
+    "NR_BENEF_M": "medical_count",
+    "NR_BENEF_O": "dental_count"
 })
 
 df.to_csv(agg_file, index=False, sep=';')

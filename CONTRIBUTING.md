@@ -2,21 +2,48 @@
 
 If you would like to contribute to **medbr**, the first thing to do is to open a [Github issue](https://github.com/pamelahaji/medbr/issues) with your suggestion of ***function*** or ***dataset*** you would like to see in the package. Keep in mind that, as a rule, the package only includes geospatial data sets with national spatial coverage that are created/managed by governmental institutions and which are publicly available.
 
-The inclusion of every dataset in medbr follows a three-step process, as follows:
+Adding a data set takes three small pieces, all in `python-package/medbr/`. As a running example, a state-level data set called `dengue` with one row per state:
 
-### Step 1. Data preparation
+### Step 1. Builder: get the data from the official source
 
-First, the contributor must write a script that will prepare the original raw data set or perform API extraction of the desired data to be used in medbr. Keep in mind, though, that each dataset has its own particularities, so each script will be a little different accordingly. 
+Write a function that downloads the file into `tmp`, keeps only what the map needs and writes `data/<name>/transformed/<name>.csv` (`;` separated, English lower-case column names). Register it with `@dataset(name, description)` in `build_data.py` (or in a module imported there):
 
-### Step 2. Data validation and upload
+```python
+from medbr.registry import dataset
 
-Once the suggestion is ready, we will test the script and validate the data output. If everything works well, the data upload or extraction mechanism will be made available for use.
+@dataset("dengue", "Dengue cases by state, 2024 (Ministry of Health)")
+def build_dengue(tmp, simplify):
+    path = download("https://.../dengue_2024.csv", tmp / "dengue.csv")   # helper in build_data.py
+    df = summarize_dengue(path)            # -> columns: uf, cases
+    _write_csv(df, "dengue", "transformed", "dengue.csv")
+```
 
-### Step 3. Download and test functions
+Keep the parsing in a small function that takes a file object (`summarize_dengue`) so it can be tested with a few lines of text. Rules of the road: use the official **direct link**, say in the docstring which period/snapshot is used, never sum snapshots of the same population, and check totals against an official number.
 
-In this step the contributor must write the package function that will be used to download the data. Most download functions have relatively simple structure and documentation.
-Once the download script is ready, the function must be tested according to the examples. If everything works well, the contributor can open a [pull request](https://github.com/pamelahaji/medbr/pulls). Add a test for your function in `python-package/tests` (see the existing ones: the data logic is tested with plain pandas, the maps with tiny synthetic data) and run `pytest` before opening the PR. Don't forget to add the new function to the table in the README.
+Expected columns by kind of map:
 
+| Map | Columns |
+|---|---|
+| by state | `uf` (abbreviation) + a count column |
+| by municipality | `city_code` (6 digits) + a count column |
+| daily heat map | `city_code`, a date (`YYYY-MM-DD`), a count column |
+
+### Step 2. Map function: one line
+
+```python
+# medbr/dengue.py
+from medbr.factories import uf_choropleth
+
+dengue = uf_choropleth("dengue", "cases", "Dengue cases", per=100_000)
+```
+
+Use `city_choropleth` for municipalities and `daily_heatmap` for time heat maps. `rate=True` and the `ufs` filter come for free. If the data set needs its own parameters (like `kind` in `beneficiaries`), write the function by hand using `read_data`, `colormap_create_uf` and `to_rate` as `beneficiaries.py` does. Export it in `__init__.py` and add a row to the table in the README.
+
+### Step 3. Tests
+
+Add the parser test to `tests/test_build_data.py` (plain text in, DataFrame out) and a case to `tests/test_maps.py` (tiny synthetic data in the fixture). Run `pytest`. The `python -m medbr.bundle` zip already includes everything under `<name>/transformed/`.
+
+Then open a pull request. After the merge, run the **build-data** Action with *publish* so users get the new data.
 
 **Spelling conventions**: Names should be lower case, short, use underscore when necessary, use English American spelling. Please have a look at the columns names and functions used in in medbr, and don't hesitate to contact if you have any question.
 

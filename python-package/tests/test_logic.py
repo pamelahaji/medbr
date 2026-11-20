@@ -63,15 +63,22 @@ def test_beds_and_beneficiaries_filter_by_uf():
     beds = pd.DataFrame({"uf": ["SP", "RJ"], "beds_count": [10, 5]})
     assert beds_data(beds).to_dict() == {"SP": 10, "RJ": 5}
     assert beds_data(beds, ufs="SP").to_dict() == {"SP": 10}
-    ben = pd.DataFrame({"uf": ["SP", "RJ"], "beneficiaries_count": [100, 50]})
-    assert beneficiaries_data(ben, ufs=["RJ"]).to_dict() == {"RJ": 50}
+    ben = pd.DataFrame({"uf": ["SP", "RJ"], "beneficiaries_count": [100, 50],
+                        "medical_count": [80, 40], "dental_count": [20, 10]})
+    assert beneficiaries_data(ben, ufs=["RJ"]).to_dict() == {"RJ": 40}  # medical by default
+    assert beneficiaries_data(ben, kind="all")["SP"] == 100
+    assert beneficiaries_data(ben, kind="dental")["RJ"] == 10
+    with pytest.raises(ValueError, match="kind"):
+        beneficiaries_data(ben, kind="x")
+    with pytest.raises(ValueError, match="rebuild"):
+        beneficiaries_data(ben[["uf", "beneficiaries_count"]])
     with pytest.raises(ValueError):
         beds_data(beds, ufs=["XX"])
 
 
 def test_read_data_missing_file_has_clear_message(tmp_path, monkeypatch):
     monkeypatch.setenv("MEDBR_DATA_DIR", str(tmp_path))
-    with pytest.raises(FileNotFoundError, match="Preparing the data"):
+    with pytest.raises(FileNotFoundError, match="section 'Data'"):
         read_data("beds", "transformed", "beds.csv")
 
 
