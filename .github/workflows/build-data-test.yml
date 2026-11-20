@@ -32,3 +32,26 @@ jobs:
         with:
           name: medbr-data
           path: medbr-data.zip
+      - name: End-to-end with the real data
+        env:
+          MEDBR_DATA_DIR: ${{ github.workspace }}/data-build
+        run: |
+          python - <<'PY'
+          import os, pandas as pd, medbr
+          from medbr.population import population, to_rate
+          from medbr.beneficiaries import beneficiaries_data
+          from medbr.utils import read_data, get_cities
+          b = beneficiaries_data(read_data("beneficiaries","transformed","beneficiaries.csv"))
+          rate = to_rate(b, population("uf"), 100)
+          print("SANITY beneficiaries per 100 inhab:", rate.round(1).sort_values().to_dict())
+          print("SANITY total beneficiaries:", int(b.sum()), " total pop:", int(population("uf").sum()))
+          c = get_cities(); print("SANITY cities:", len(c), "ufs:", c.uf.nunique(), "crs:", c.crs.to_epsg())
+          for name, fn in [("beneficiaries", lambda: medbr.beneficiaries()),
+                           ("beneficiaries rate", lambda: medbr.beneficiaries(rate=True)),
+                           ("plancoverage SP", lambda: medbr.plancoverage(ufs=["SP"])),
+                           ("plancoverage SP rate", lambda: medbr.plancoverage(ufs=["SP"], rate=True)),
+                           ("plancoverage ALL", lambda: medbr.plancoverage())]:
+              m = fn(); m.save("/tmp/x.html"); print("MAP", name, round(os.path.getsize("/tmp/x.html")/1e6,1), "MB")
+          pc = read_data("plancoverage","transformed","plancoverage.csv")
+          print("SANITY plancoverage rows:", len(pc), "cities:", pc.city_code.nunique(), "operators:", pc.operator.nunique())
+          PY
