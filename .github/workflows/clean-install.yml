@@ -1,0 +1,19 @@
+name: clean-install
+on:
+  push:
+    branches: [test/clean-install2]
+jobs:
+  t:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install "git+https://github.com/pamelahaji/medbr.git@main#subdirectory=python-package"
+      - run: |
+          cd /tmp && python - <<'PY'
+          import medbr, os
+          for n, f in [("vaccination penta SP", lambda: medbr.vaccination("penta", ufs="SP")),
+                       ("vaccination bcg", lambda: medbr.vaccination("bcg")),
+                       ("beds rate", lambda: medbr.beds(rate=True))]:
+              m = f(); m.save("/tmp/x.html"); print("OK", n, round(os.path.getsize("/tmp/x.html")/1e6,2), "MB")
+          PY
