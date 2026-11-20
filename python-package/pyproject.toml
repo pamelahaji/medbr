@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=61"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,7 +7,8 @@ name = "medbr"
 version = "0.1.0"
 description = "Geospatial visualization of Brazilian public health data"
 requires-python = ">=3.9"
-license = {text = "MIT"}
+license = "MIT"
+license-files = ["LICENSE"]
 dependencies = ["folium", "pandas", "geopandas", "numpy", "requests", "branca"]
 
 [project.optional-dependencies]

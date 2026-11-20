@@ -182,12 +182,20 @@ def get_cities(ufs=None, city_name=None, city_code=None):
     return cities
 
 
+def city_centroids(cities):
+    """Centroids in lat/lon, computed in a projected CRS (SIRGAS 2000 / Brazil Polyconic)."""
+    geometry = cities.geometry
+    if geometry.crs is None:
+        geometry = geometry.set_crs(4674)  # IBGE mesh datum
+    return geometry.to_crs(5880).centroid.to_crs(4326)
+
+
 def new_map(location=None, zoom_start=None):
     import folium
 
     return folium.Map(
         location=location or BR_CENTER,
-        tiles="cartodbpositron",
+        tiles="OpenStreetMap",
         zoom_start=zoom_start or BR_ZOOM,
         control_scale=True,
     )
@@ -271,7 +279,7 @@ def temporal_heatmap(filename, date_col, count_col, cities_code=None, start_at=N
         data = add_rate(data, population("city"), count_col, per)
 
     cities = get_cities(city_code=sorted(data["city_code"].unique()))
-    centroids = cities.geometry.centroid
+    centroids = city_centroids(cities)
     points = dict(zip(cities["city_code"], zip(centroids.y, centroids.x)))
 
     time_index, frames = group_by_date(data, date_col, count_col, points)
