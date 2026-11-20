@@ -6,24 +6,25 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Find and check SIM / SINASC / Leitos files
+      - name: Check files and columns
         run: |
-          H=https://dadosabertos.saude.gov.br/dataset
-          echo "== SIM resource pages -> s3 urls"
-          for r in 37d4deb8-cfba-4187-bef2-74ca1e0be8df 2dee2fc9-d19f-41bc-b058-6d4154f126ab 32fd4a5b-3625-49d8-910f-6752574a989d 9ade641a-1f25-40d9-b55b-cff7096eb5b4 16e78990-4ba6-4e6a-8d60-72e0604cd4b6; do
-            echo "-- $r"; curl -sL --max-time 60 "$H/sim/resource/$r" | grep -o 'https://s3[^"<> ]*' | sort -u | head -3
-          done
-          echo "== Leitos resource links"
-          curl -sL --max-time 60 "$H/hospitais-e-leitos" | grep -o '/dataset/hospitais-e-leitos/resource/[0-9a-f-]*' | sort -u | head -40 > /tmp/leitos_res.txt; wc -l /tmp/leitos_res.txt
-          for p in $(cat /tmp/leitos_res.txt); do
-            page=$(curl -sL --max-time 60 "https://dadosabertos.saude.gov.br$p"); t=$(echo "$page" | grep -o '<title>[^<]*' | head -1 | cut -c1-60); u=$(echo "$page" | grep -o 'https://s3[^"<> ]*' | sort -u | head -1); echo "$t | $u"
-          done | grep -E "Leitos (2021|2022|2023|2024)" 
-          echo "== HEAD candidates"
-          for u in \
-            https://s3.sa-east-1.amazonaws.com/ckan.saude.gov.br/SINASC/csv/SINASC_2021_csv.zip \
-            https://s3.sa-east-1.amazonaws.com/ckan.saude.gov.br/SINASC/csv/SINASC_2022_csv.zip \
-            https://s3.sa-east-1.amazonaws.com/ckan.saude.gov.br/Leitos_SUS/Leitos_2023.csv \
-            https://s3.sa-east-1.amazonaws.com/ckan.saude.gov.br/Leitos_SUS/Leitos_2024.csv \
-            https://s3.sa-east-1.amazonaws.com/ckan.saude.gov.br/Leitos_SUS/Leitos_csv_2023.zip ; do
-            echo "$(curl -sIL --max-time 30 "$u" | grep -iE '^HTTP|^content-length' | tr -d '\r' | tr '\n' ' ') $u"
-          done
+          S=https://s3.sa-east-1.amazonaws.com/ckan.saude.gov.br
+          H=https://dadosabertos.saude.gov.br
+          echo "== Leitos resources (title | s3)"
+          curl -sL --max-time 60 "$H/dataset/hospitais-e-leitos" | grep -o '/dataset/hospitais-e-leitos/resource/[0-9a-f-]*' | sort -u > /tmp/lr.txt
+          for p in $(cat /tmp/lr.txt); do
+            page=$(curl -sL --max-time 60 "$H$p"); t=$(echo "$page" | grep -o '<title>[^<]*' | head -1 | cut -c8-60); u=$(echo "$page" | grep -o 'https://s3[^"<> ]*' | sort -u | head -1); echo "$t | $u"
+          done || true
+          mkdir -p /tmp/p && cd /tmp/p
+          peekzip() { echo "== ZIP $1"; rm -f f; curl -sL --max-time 300 -o f "$1"; ls -l f | awk '{print "size", $5}'; unzip -l f | tail -4; c=$(unzip -Z1 f | head -1); unzip -p f "$c" | head -2 | cut -c1-600; }
+          peekzip $S/SIM/csv/Mortalidade_Geral_2021_csv.zip
+          peekzip $S/SINASC/csv/SINASC_2021_csv.zip
+          echo "== CSV Leitos_2024"; curl -sL --max-time 300 -o l.csv $S/Leitos_SUS/Leitos_2024.csv; ls -l l.csv | awk '{print "size", $5}'; head -c 700 l.csv | iconv -f latin1 -t utf8 | head -2; 
+          python3 - <<'PY'
+          import pandas as pd
+          d = pd.read_csv("/tmp/p/l.csv", sep=";", encoding="latin-1", nrows=None, low_memory=False)
+          print("cols:", list(d.columns)); print("rows:", len(d))
+          for c in d.columns:
+              if c.upper().startswith("COMP"): print(c, sorted(d[c].astype(str).unique())[:14])
+          print(d[["UF","LEITOS_EXISTENTES"]].head(3))
+          PY
