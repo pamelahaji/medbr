@@ -1,0 +1,46 @@
+name: build-data
+
+# Builds the data bundle from the official sources (IBGE, ANS) and optionally
+# publishes it as the `data-v1` release that medbr downloads on first use.
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish the zip as release data-v1"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: pip install -e python-package
+      - name: Build data
+        env:
+          MEDBR_DATA_DIR: ${{ github.workspace }}/data-build
+        run: python -m medbr.build_data --bundle medbr-data.zip
+      - name: Summary
+        run: |
+          ls -lh medbr-data.zip
+          unzip -l medbr-data.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: medbr-data
+          path: medbr-data.zip
+      - name: Publish release
+        if: ${{ inputs.publish }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view data-v1 >/dev/null 2>&1 || gh release create data-v1 --title "medbr data v1" \
+            --notes "Prepared data sets for medbr (IBGE mesh and population, ANS beneficiaries and plans)."
+          gh release upload data-v1 medbr-data.zip --clobber

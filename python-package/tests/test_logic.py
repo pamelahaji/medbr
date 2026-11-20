@@ -71,7 +71,7 @@ def test_beds_and_beneficiaries_filter_by_uf():
 
 def test_read_data_missing_file_has_clear_message(tmp_path, monkeypatch):
     monkeypatch.setenv("MEDBR_DATA_DIR", str(tmp_path))
-    with pytest.raises(FileNotFoundError, match="Preparing the data"):
+    with pytest.raises(FileNotFoundError, match="section 'Data'"):
         read_data("beds", "transformed", "beds.csv")
 
 

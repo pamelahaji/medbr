@@ -43,16 +43,15 @@ Useful environment variables:
 | `MEDBR_NO_DOWNLOAD=1` | never download; fail with a clear message if a file is missing |
 | `MEDBR_BUNDLE_URL` | download the bundle from another address |
 
-### Rebuilding the data from the raw files (maintainers)
+### Building the data from the official sources
 
-1. Download the raw files into `medbr/data/<dataset>/raw/` (file names are in each `*_aggregator.py`; the municipal mesh is IBGE's `BR_Municipios_2022.shp`; the states file is `medbr/data/cities/raw/br_states.json`).
-2. Run the scripts, e.g. `python medbr/data/cities/cities.py` (paths do not depend on the current directory).
-3. Build and publish the bundle:
+`python -m medbr.build_data` downloads and prepares, straight from the sources: the IBGE municipal mesh (also gives the states file), the Census 2022 population (IBGE SIDRA), ANS beneficiaries (latest quarter) and ANS plans by municipality (about 1 GB download). Use `--only cities population` to choose, `--bundle medbr-data.zip` to also write the zip.
 
-```bash
-python -m medbr.bundle --simplify 0.005 --out medbr-data.zip   # --simplify shrinks the municipal mesh
-gh release create data-v1 medbr-data.zip --title "medbr data v1"
-```
+The GitHub Action **build-data** does this on GitHub and can publish the result as the `data-v1` release that `medbr` downloads (Actions → build-data → *Run workflow*, check *publish*).
+
+Not automated yet: births (SINASC), deaths (SIM) and hospital beds. Use their `*_aggregator.py` scripts in `medbr/data/<dataset>/` with the raw files in `raw/`, then `python -m medbr.bundle`.
+
+To fetch a newer bundle: `python -m medbr.download`.
 
 # Counts or rates?
 

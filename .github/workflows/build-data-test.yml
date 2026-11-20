@@ -1,0 +1,35 @@
+name: build-data-test
+
+# Builds the data bundle from the official sources (IBGE, ANS) and optionally
+# publishes it as the `data-v1` release that medbr downloads on first use.
+on:
+  push:
+    branches: [feat/build-data-from-sources]
+
+permissions:
+  contents: read
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: pip install -e python-package
+      - name: Build data
+        env:
+          MEDBR_DATA_DIR: ${{ github.workspace }}/data-build
+        run: python -m medbr.build_data --bundle medbr-data.zip
+      - name: Summary
+        run: |
+          ls -lh medbr-data.zip
+          unzip -l medbr-data.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: medbr-data
+          path: medbr-data.zip

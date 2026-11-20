@@ -32,7 +32,11 @@ def data_dir():
 
 
 def ensure_data(*parts):
-    """Return the path of a data file, downloading the data bundle if it is missing."""
+    """Return the path of a data file, downloading the data bundle if it is missing.
+
+    The bundle is downloaded at most once (a marker file remembers it); use
+    ``python -m medbr.download`` to fetch a newer one.
+    """
     from medbr import download
 
     path = data_path(*parts)
@@ -40,16 +44,19 @@ def ensure_data(*parts):
         return path
     reason = "automatic download is disabled (MEDBR_NO_DOWNLOAD)"
     if download.downloads_enabled():
-        try:
-            download.fetch_bundle(data_dir())
-            if path.exists():
-                return path
-            reason = "the downloaded bundle does not contain this file"
-        except Exception as exc:  # network error, 404 (bundle not published yet), bad zip...
-            reason = f"download failed: {exc}"
+        if download.bundle_marker().exists():
+            reason = "the downloaded bundle does not contain this file (it was already downloaded)"
+        else:
+            try:
+                download.update_data()
+                if path.exists():
+                    return path
+                reason = "the downloaded bundle does not contain this file"
+            except Exception as exc:  # network error, 404 (bundle not published yet), bad zip...
+                reason = f"download failed: {exc}"
     raise FileNotFoundError(
-        f"Data file not found: {path} ({reason}). See README, section "
-        "'Preparing the data', or set MEDBR_DATA_DIR."
+        f"Data file not found: {path} ({reason}). See README, section 'Data', "
+        "or set MEDBR_DATA_DIR."
     )
 
 

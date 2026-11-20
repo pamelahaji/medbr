@@ -40,3 +40,22 @@ def fetch_bundle(dest, url=None, timeout=120):
             with open(zip_path, "wb") as f:
                 shutil.copyfileobj(response.raw, f)
         safe_extract(zip_path, dest)
+
+
+def bundle_marker():
+    from medbr.utils import data_dir
+
+    return data_dir() / ".bundle_downloaded"
+
+
+def update_data(url=None):
+    """Download the data bundle into the data folder (replacing files with the same name)."""
+    from medbr.utils import data_dir
+
+    fetch_bundle(data_dir(), url)
+    bundle_marker().touch()
+
+
+if __name__ == "__main__":
+    update_data()
+    print("data updated")
