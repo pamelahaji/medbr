@@ -45,11 +45,18 @@ Useful environment variables:
 
 ### Building the data from the official sources
 
-`python -m medbr.build_data` downloads and prepares, straight from the sources: the IBGE municipal mesh (also gives the states file), the Census 2022 population (IBGE SIDRA), ANS beneficiaries (latest quarter) and ANS plans by municipality (about 1 GB download). Use `--only cities population` to choose, `--bundle medbr-data.zip` to also write the zip.
+`python -m medbr.build_data` downloads and prepares, straight from the official sources:
 
-The GitHub Action **build-data** does this on GitHub and can publish the result as the `data-v1` release that `medbr` downloads (Actions → build-data → *Run workflow*, check *publish*).
+| Data set | Source |
+|---|---|
+| municipal mesh and states | IBGE municipal mesh 2022 (203 MB, simplified to ~5 MB) |
+| population | IBGE SIDRA, Census 2022 |
+| beneficiaries, plans | ANS open data (latest quarter; ~1 GB for the plans file) |
+| deaths | SIM "Mortalidade Geral" 2021-2022 (OpenDataSUS), non-fetal deaths |
+| births | SINASC 2021-2022 (OpenDataSUS) |
+| beds | CNES "Leitos 2023" (OpenDataSUS), latest month of the file |
 
-Not automated yet: births (SINASC), deaths (SIM) and hospital beds. Use their `*_aggregator.py` scripts in `medbr/data/<dataset>/` with the raw files in `raw/`, then `python -m medbr.bundle`.
+Use `--only cities population` to choose and `--bundle medbr-data.zip` to also write the zip. The whole build downloads about 2 GB, so it is meant to run on GitHub: the **build-data** Action does it and can publish the result as the `data-v1` release that `medbr` downloads (Actions → build-data → *Run workflow*, check *publish*).
 
 To fetch a newer bundle: `python -m medbr.download`.
 
@@ -63,6 +70,8 @@ By default the maps show **absolute counts**, so populous places look more inten
 | `beneficiaries` | medical-plan beneficiaries per 100 inhabitants (by state, latest quarter) |
 | `plancoverage` | plans per 100,000 inhabitants (by city) |
 | `birth`, `mortality` | daily births/deaths per 100,000 inhabitants (by city) |
+
+For `birth` and `mortality`, filter by `ufs`/`cities_code` and dates: the whole country over two years is a very large map.
 
 Caveats: births and deaths are counted by the city where they **occurred**, not where the person lives, so cities with large hospitals are over-represented; one census population is used as the denominator for all years.
 

@@ -11,8 +11,11 @@ Sources (downloaded to a temporary folder, only the result is kept):
 * beneficiaries  ANS open data, latest quarterly snapshot (``benef_regiao_geog.zip``)
 * plancoverage   ANS open data, plans by municipality (``pda_area_comer_plano_ntrp.csv``, ~1 GB)
 
-Not automated yet (no verified direct link): births (SINASC), deaths (SIM) and hospital beds;
-use their ``*_aggregator.py`` scripts.
+* mortality   SIM "Mortalidade Geral" 2021-2022 (OpenDataSUS, ~110 MB zip per year); deaths by
+              municipality of occurrence and day, fetal deaths excluded
+* birth       SINASC 2021-2022 (OpenDataSUS, ~110 MB zip per year); births by municipality of
+              occurrence and day
+* beds        CNES "Leitos 2023" (OpenDataSUS); existing beds by state in the latest month of the file
 """
 import argparse
 import json
@@ -36,7 +39,13 @@ ANS_PLANS_URL = f"{ANS_PDA}/area_comercializacao_planos_ntrp/pda_area_comer_plan
 
 CITY_SIMPLIFY = 0.005   # degrees (~500 m): keeps the maps light
 STATE_SIMPLIFY = 0.01
-DATASETS = ["cities", "population", "beneficiaries", "plancoverage"]
+S3 = "https://s3.sa-east-1.amazonaws.com/ckan.saude.gov.br"
+SIM_URL = S3 + "/SIM/csv/Mortalidade_Geral_{year}_csv.zip"
+SINASC_URL = S3 + "/SINASC/csv/SINASC_{year}_csv.zip"
+BEDS_URL = S3 + "/Leitos_SUS/Leitos_{year}.csv"
+YEARS = (2021, 2022)
+BEDS_YEAR = 2023
+DATASETS = ["cities", "population", "beneficiaries", "plancoverage", "mortality", "birth", "beds"]
 
 
 def download(url, dest, timeout=600):
@@ -130,6 +139,70 @@ def build_plancoverage(csv_path):
     return _write_csv(summarize_plans(csv_path), "plancoverage", "transformed", "plancoverage.csv")
 
 
+# ---------------------------------------------------------------- SIM, SINASC, CNES beds
+def _count_by_day(csv_file, city_col, date_col, count_name, only=None, chunksize=1_000_000):
+    """Rows per (municipality, day) of a DATASUS csv (dates are ``ddmmyyyy``).
+
+    ``only=(column, value)`` keeps just the rows where ``column == value``.
+    """
+    usecols = [city_col, date_col] + ([only[0]] if only else [])
+    total = None
+    reader = pd.read_csv(csv_file, sep=";", usecols=usecols, dtype=str, encoding="latin-1", chunksize=chunksize)
+    for chunk in reader:
+        if only:
+            chunk = chunk[chunk[only[0]] == only[1]]
+        chunk = chunk.assign(**{date_col: pd.to_datetime(chunk[date_col], format="%d%m%Y", errors="coerce")})
+        chunk = chunk.dropna(subset=[city_col, date_col])
+        part = chunk.groupby([city_col, date_col]).size()
+        total = part if total is None else total.add(part, fill_value=0)
+    if total is None or len(total) == 0:
+        raise ValueError("No records found.")
+    df = total.astype("int64").rename(count_name).reset_index()
+    df[date_col] = df[date_col].dt.strftime("%Y-%m-%d")
+    return df.rename(columns={city_col: "city_code", date_col: count_name.replace("_count", "_date")})
+
+
+def summarize_deaths(csv_file):
+    """SIM csv -> ``city_code``, ``death_date``, ``death_count`` (non-fetal deaths, by occurrence)."""
+    return _count_by_day(csv_file, "CODMUNOCOR", "DTOBITO", "death_count", only=("TIPOBITO", "2"))
+
+
+def summarize_births(csv_file):
+    """SINASC csv -> ``city_code``, ``birth_date``, ``birth_count`` (by municipality of occurrence)."""
+    return _count_by_day(csv_file, "CODMUNNASC", "DTNASC", "birth_count")
+
+
+def combine_daily(frames, date_col, count_col):
+    """Add up the same (city, day) coming from several yearly files."""
+    return pd.concat(frames).groupby(["city_code", date_col], as_index=False)[count_col].sum()
+
+
+def summarize_beds(csv_file):
+    """CNES "Leitos" csv (one row per establishment and month) -> existing beds by UF.
+
+    Only the latest month (``COMP``) is used: summing all months would count the same beds 12 times.
+    """
+    from medbr.population import UF_CODES
+
+    df = pd.read_csv(csv_file, usecols=["COMP", "UF", "LEITOS_EXISTENTES"], dtype={"COMP": str}, encoding="latin-1")
+    latest = df["COMP"].max()
+    df = df[(df["COMP"] == latest) & df["UF"].isin(UF_CODES.values())]
+    out = df.groupby("UF", as_index=False)["LEITOS_EXISTENTES"].sum()
+    return out.rename(columns={"UF": "uf", "LEITOS_EXISTENTES": "beds_count"}), latest
+
+
+def _from_yearly_zips(url_template, summarize, date_col, count_col, tmp):
+    frames = []
+    for year in YEARS:
+        zip_path = download(url_template.format(year=year), Path(tmp) / f"{count_col}_{year}.zip", timeout=1800)
+        with zipfile.ZipFile(zip_path) as zf:
+            name = next(n for n in zf.namelist() if n.lower().endswith(".csv"))
+            with zf.open(name) as f:
+                frames.append(summarize(f))
+        zip_path.unlink()
+    return combine_daily(frames, date_col, count_col)
+
+
 # ---------------------------------------------------------------- driver
 def build_all(only=None, bundle=None, simplify=CITY_SIMPLIFY):
     from medbr.population import population
@@ -160,6 +233,18 @@ def build_all(only=None, bundle=None, simplify=CITY_SIMPLIFY):
         if "plancoverage" in wanted:
             print("plancoverage: ANS (large file) ...", flush=True)
             print("  ->", build_plancoverage(download(ANS_PLANS_URL, tmp / "plans.csv", timeout=1800)))
+        if "mortality" in wanted:
+            print("mortality: SIM (large files) ...", flush=True)
+            df = _from_yearly_zips(SIM_URL, summarize_deaths, "death_date", "death_count", tmp)
+            print("  ->", _write_csv(df, "mortality", "transformed", "mortality.csv"), f"({int(df.death_count.sum())} deaths)")
+        if "birth" in wanted:
+            print("birth: SINASC (large files) ...", flush=True)
+            df = _from_yearly_zips(SINASC_URL, summarize_births, "birth_date", "birth_count", tmp)
+            print("  ->", _write_csv(df, "birth", "transformed", "birth.csv"), f"({int(df.birth_count.sum())} births)")
+        if "beds" in wanted:
+            print("beds: CNES ...", flush=True)
+            df, month = summarize_beds(download(BEDS_URL.format(year=BEDS_YEAR), tmp / "beds.csv"))
+            print("  ->", _write_csv(df, "beds", "transformed", "beds.csv"), f"(month {month}, {int(df.beds_count.sum())} beds)")
     if bundle:
         print("bundle ->", build_bundle(bundle))
 

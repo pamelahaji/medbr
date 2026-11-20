@@ -268,7 +268,7 @@ def colormap_create_uf(data, caption=None):
 
 
 def temporal_heatmap(filename, date_col, count_col, cities_code=None, start_at=None, end_at=None,
-                     rate=False, per=100_000):
+                     rate=False, per=100_000, ufs=None):
     """Time heat map of daily counts by municipality (used by birth and mortality).
 
     With ``rate=True`` the intensity is the daily count per ``per`` inhabitants.
@@ -279,6 +279,8 @@ def temporal_heatmap(filename, date_col, count_col, cities_code=None, start_at=N
     codes = as_code_list(cities_code)
     if codes is not None:
         data = data[data["city_code"].isin(codes)]
+    if ufs is not None:
+        data = data[data["city_code"].isin(get_cities(ufs=ufs)["city_code"])]
     data = filter_dates(data, date_col, start_at, end_at)
     if rate:
         from medbr.population import population, add_rate

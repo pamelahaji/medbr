@@ -81,3 +81,45 @@ def test_build_cities_from_ibge_like_zip(tmp_path, monkeypatch):
     assert sorted(cities["city_code"]) == ["330455", "355030"] and set(cities["uf"]) == {"SP", "RJ"}
     states = json.loads((tmp_path / "data" / "cities" / "raw" / "br_states.json").read_text())
     assert sorted(f["id"] for f in states["features"]) == ["RJ", "SP"]
+
+
+def test_summarize_deaths_excludes_fetal_and_converts_dates():
+    from medbr.build_data import summarize_deaths
+
+    csv = io.StringIO(
+        "TIPOBITO;DTOBITO;CODMUNOCOR\n"
+        "2;05012021;355030\n2;05012021;355030\n1;05012021;355030\n2;06012021;330455\n2;;330455\n2;07012021;\n"
+    )
+    out = summarize_deaths(csv)
+    got = {(r.city_code, r.death_date): r.death_count for r in out.itertuples()}
+    assert got == {("355030", "2021-01-05"): 2, ("330455", "2021-01-06"): 1}
+
+
+def test_summarize_births_counts_rows_across_chunks():
+    from medbr.build_data import summarize_births
+
+    csv = io.StringIO("CODMUNNASC;DTNASC;HORANASC\n355030;01022021;1200\n355030;01022021;\n355030;02022021;0100\n")
+    out = summarize_births(csv)
+    got = {(r.city_code, r.birth_date): r.birth_count for r in out.itertuples()}
+    assert got == {("355030", "2021-02-01"): 2, ("355030", "2021-02-02"): 1}  # empty HORANASC still counts
+
+
+def test_combine_daily_adds_same_day_from_two_files():
+    from medbr.build_data import combine_daily
+
+    a = pd.DataFrame({"city_code": ["1"], "death_date": ["2021-12-31"], "death_count": [2]})
+    b = pd.DataFrame({"city_code": ["1", "1"], "death_date": ["2021-12-31", "2022-01-01"], "death_count": [3, 1]})
+    out = combine_daily([a, b], "death_date", "death_count").set_index("death_date")["death_count"]
+    assert out.to_dict() == {"2021-12-31": 5, "2022-01-01": 1}
+
+
+def test_summarize_beds_uses_latest_month_only():
+    from medbr.build_data import summarize_beds
+
+    csv = io.StringIO(
+        "COMP,UF,LEITOS_EXISTENTES\n"
+        "202301,SP,100\n202301,RJ,50\n202312,SP,110\n202312,SP,10\n202312,RJ,55\n202312,XX,9\n"
+    )
+    out, month = summarize_beds(csv)
+    assert month == "202312"
+    assert out.set_index("uf")["beds_count"].to_dict() == {"RJ": 55, "SP": 120}
