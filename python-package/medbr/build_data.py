@@ -85,13 +85,17 @@ def build_cities(mesh_zip, simplify=CITY_SIMPLIFY, state_simplify=STATE_SIMPLIFY
 
 # ---------------------------------------------------------------- ANS
 def summarize_beneficiaries(csv_file):
-    """ANS ``tb_br_*.csv`` -> beneficiaries by UF (``uf``, ``beneficiaries_count``)."""
+    """ANS ``tb_br_*.csv`` -> beneficiaries by UF: all, medical and dental plans."""
     from medbr.population import UF_CODES
 
-    df = pd.read_csv(csv_file, sep=";", usecols=["SG_UF", "NR_BENEF_T"])
+    df = pd.read_csv(csv_file, sep=";", usecols=["SG_UF", "NR_BENEF_T", "NR_BENEF_M", "NR_BENEF_O"])
     df = df[df["SG_UF"].isin(UF_CODES.values())]
-    df = df.groupby("SG_UF", as_index=False)["NR_BENEF_T"].sum()
-    return df.rename(columns={"SG_UF": "uf", "NR_BENEF_T": "beneficiaries_count"})
+    df = df.groupby("SG_UF", as_index=False)[["NR_BENEF_T", "NR_BENEF_M", "NR_BENEF_O"]].sum()
+    # T = M + O: a person with a medical and a dental plan is counted in both
+    return df.rename(columns={
+        "SG_UF": "uf", "NR_BENEF_T": "beneficiaries_count",
+        "NR_BENEF_M": "medical_count", "NR_BENEF_O": "dental_count",
+    })
 
 
 def build_beneficiaries(zip_path):

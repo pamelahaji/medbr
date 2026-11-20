@@ -32,7 +32,7 @@ def data_dir(tmp_path, monkeypatch):
         df.to_csv(tmp_path / name / "transformed" / f"{name}.csv", sep=";", index=False)
 
     put("beds", pd.DataFrame({"uf": ["SP", "RJ"], "beds_count": [10, 5]}))
-    put("beneficiaries", pd.DataFrame({"uf": ["SP", "RJ"], "beneficiaries_count": [100, 50]}))
+    put("beneficiaries", pd.DataFrame({"uf": ["SP", "RJ"], "beneficiaries_count": [100, 50], "medical_count": [80, 40], "dental_count": [20, 10]}))
     put("plancoverage", pd.DataFrame({"city_code": [111111, 222222], "operator": [1, 2], "count": [4, 6]}))
     pop_dir = tmp_path / "population" / "transformed"
     pop_dir.mkdir(parents=True)
@@ -49,6 +49,7 @@ def data_dir(tmp_path, monkeypatch):
     lambda: medbr.beds(ufs=["SP"]),
     lambda: medbr.beds(rate=True),
     lambda: medbr.beneficiaries(rate=True),
+    lambda: medbr.beneficiaries(kind="dental"),
     lambda: medbr.plancoverage(rate=True),
     lambda: medbr.birth(rate=True),
     lambda: medbr.mortality(rate=True),

@@ -11,17 +11,22 @@ from medbr.utils import ensure_data
 
 
 def test_summarize_beneficiaries_sums_by_uf_and_drops_unknown():
-    csv = io.StringIO("ID_CMPT;SG_UF;NR_BENEF_T\n2026-06;SP;10\n2026-06;SP;5\n2026-06;RJ;7\n2026-06;XX;99\n")
-    out = summarize_beneficiaries(csv)
-    assert out.set_index("uf")["beneficiaries_count"].to_dict() == {"RJ": 7, "SP": 15}
+    csv = io.StringIO(
+        "SG_UF;NR_BENEF_T;NR_BENEF_M;NR_BENEF_O\n"
+        "SP;10;6;4\nSP;5;5;0\nRJ;7;7;0\nXX;99;99;0\n"
+    )
+    out = summarize_beneficiaries(csv).set_index("uf")
+    assert out["beneficiaries_count"].to_dict() == {"RJ": 7, "SP": 15}
+    assert out["medical_count"].to_dict() == {"RJ": 7, "SP": 11}
+    assert out["dental_count"].to_dict() == {"RJ": 0, "SP": 4}
 
 
 def test_build_beneficiaries_uses_only_latest_snapshot(tmp_path, monkeypatch):
     monkeypatch.setenv("MEDBR_DATA_DIR", str(tmp_path / "data"))
     z = tmp_path / "b.zip"
     with zipfile.ZipFile(z, "w") as zf:
-        zf.writestr("tb_br_2512.csv", "SG_UF;NR_BENEF_T\nSP;100\n")
-        zf.writestr("tb_br_2606.csv", "SG_UF;NR_BENEF_T\nSP;7\n")
+        zf.writestr("tb_br_2512.csv", "SG_UF;NR_BENEF_T;NR_BENEF_M;NR_BENEF_O\nSP;100;100;0\n")
+        zf.writestr("tb_br_2606.csv", "SG_UF;NR_BENEF_T;NR_BENEF_M;NR_BENEF_O\nSP;7;7;0\n")
     path, latest = build_beneficiaries(z)
     assert latest == "tb_br_2606.csv"
     assert pd.read_csv(path, sep=";")["beneficiaries_count"].tolist() == [7]

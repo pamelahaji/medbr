@@ -60,7 +60,7 @@ By default the maps show **absolute counts**, so populous places look more inten
 | Function | `rate=True` shows |
 |---|---|
 | `beds` | beds per 1,000 inhabitants (by state) |
-| `beneficiaries` | beneficiaries per 100 inhabitants (by state, latest quarter) |
+| `beneficiaries` | medical-plan beneficiaries per 100 inhabitants (by state, latest quarter) |
 | `plancoverage` | plans per 100,000 inhabitants (by city) |
 | `birth`, `mortality` | daily births/deaths per 100,000 inhabitants (by city) |
 
@@ -92,7 +92,7 @@ More examples in [`python-package/examples/run_all.py`](python-package/examples/
 |`medbr.mortality(cities_code, start_at, end_at, rate)`| Population Health | Time heat map of deaths per day by city (2021-2022) | SIM |
 |`medbr.birth(cities_code, start_at, end_at, rate)`| Population Health | Time heat map of births per day by city (2021-2022) | SINASC |
 |`medbr.plancoverage(ufs, operators, rate)`| Complementary Health | Choropleth of health plans sold by city | ANS |
-|`medbr.beneficiaries(ufs, rate)`| Complementary Health | Choropleth of supplementary health beneficiaries by state | ANS |
+|`medbr.beneficiaries(ufs, rate, kind)`| Complementary Health | Choropleth of supplementary health beneficiaries by state (latest quarter); `kind`: `medical` (default), `dental`, `all` | ANS |
 
 Under development (not exported yet): COVID-19 vaccination (`covid_vaccine`) and sanitation (`sanitation`).
 
