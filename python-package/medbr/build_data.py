@@ -32,6 +32,7 @@ import pandas as pd
 import requests
 
 from medbr.registry import REGISTRY, dataset
+from medbr.vaccination import VACCINES
 from medbr.utils import data_dir, data_path
 
 IBGE_MESH_URL = (
@@ -54,14 +55,6 @@ PNI_HOST, PNI_DIR = "ftp.datasus.gov.br", "/dissemin/publicos/PNI/DADOS"
 # 2019 is incomplete in the FTP (reporting moved to the new SI-PNI/e-SUS APS and many municipalities
 # stopped being counted), so 2018 is the last year with reliable coverage.
 PNI_YEAR = 2018
-# immunobiological code in the PNI files -> (key used by medbr.vaccination, label)
-VACCINES = {
-    "072": ("bcg", "BCG"), "073": ("hepatitis_b", "Hepatitis B"), "061": ("rotavirus", "Rotavirus"),
-    "053": ("meningococcal_c", "Meningococcal C"), "080": ("penta", "Pentavalent"),
-    "012": ("pneumococcal", "Pneumococcal"), "074": ("polio", "Poliomyelitis"),
-    "006": ("yellow_fever", "Yellow fever"), "096": ("hepatitis_a", "Hepatitis A"),
-    "021": ("mmr_d1", "MMR dose 1"), "098": ("mmr_d2", "MMR dose 2"), "097": ("tetra_viral", "Tetra viral"),
-}
 
 
 def download(url, dest, timeout=600):

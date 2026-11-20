@@ -1,7 +1,14 @@
-from medbr.build_data import VACCINES
 from medbr.factories import city_series
 from medbr.utils import colormap_create, read_data
 
+# immunobiological code in the SI-PNI files -> (key used by ``vaccination``, label)
+VACCINES = {
+    "072": ("bcg", "BCG"), "073": ("hepatitis_b", "Hepatitis B"), "061": ("rotavirus", "Rotavirus"),
+    "053": ("meningococcal_c", "Meningococcal C"), "080": ("penta", "Pentavalent"),
+    "012": ("pneumococcal", "Pneumococcal"), "074": ("polio", "Poliomyelitis"),
+    "006": ("yellow_fever", "Yellow fever"), "096": ("hepatitis_a", "Hepatitis A"),
+    "021": ("mmr_d1", "MMR dose 1"), "098": ("mmr_d2", "MMR dose 2"), "097": ("tetra_viral", "Tetra viral"),
+}
 LABELS = {key: label for key, label in VACCINES.values()}
 
 

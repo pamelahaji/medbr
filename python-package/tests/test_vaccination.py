@@ -76,3 +76,13 @@ def test_fetch_ftp_tries_the_next_name(monkeypatch):
     assert fetch_ftp("h", "/d", ["X.DBF", "X.dbf"]) == b"abc"
     with pytest.raises(FileNotFoundError):
         fetch_ftp("h", "/d", ["X.DBF"])
+
+
+def test_build_data_runs_as_a_module():
+    """Regression: importing medbr must not import build_data, or `python -m` registers twice."""
+    import subprocess
+    import sys
+
+    out = subprocess.run([sys.executable, "-m", "medbr.build_data", "--help"], capture_output=True, text=True)
+    assert out.returncode == 0, out.stderr
+    assert "vaccination" in out.stdout
