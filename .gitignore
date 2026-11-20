@@ -7,4 +7,12 @@
 *.Identifier
 *.zip
 *.pyc
-*.json
+__pycache__/
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+# generated maps
+*.html
+# raw geojson inputs (e.g. br_states.json) are provided by the user
+medbr/data/**/*.json

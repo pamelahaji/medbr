@@ -1,11 +1,13 @@
-import os
+from pathlib import Path
 import pandas as pd
 
-agg_file = 'medbr/data/beds/transformed/beds.csv'
+HERE = Path(__file__).resolve().parent
+agg_file = HERE / 'transformed' / 'beds.csv'
+agg_file.parent.mkdir(exist_ok=True)
 
-df = pd.read_csv(f'medbr/data/beds/raw/data_2023.csv', encoding='latin-1')
+df = pd.read_csv(HERE / 'raw' / 'data_2023.csv', encoding='latin-1')
 
-df = df[['UF', 'LEITOS_EXISTENTES']].groupby(['UF']).sum('LEITOS_EXISTENTES').reset_index()
+df = df[['UF', 'LEITOS_EXISTENTES']].groupby(['UF']).sum().reset_index()
 
 df = df.rename(columns={
     "UF": "uf",

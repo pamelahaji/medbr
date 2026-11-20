@@ -1,9 +1,11 @@
-import os
+from pathlib import Path
 import pandas as pd
 
-agg_file = 'medbr/data/plancoverage/transformed/plancoverage.csv'
+HERE = Path(__file__).resolve().parent
+agg_file = HERE / 'transformed' / 'plancoverage.csv'
+agg_file.parent.mkdir(exist_ok=True)
 
-df = pd.read_csv(f'medbr/data/plancoverage/raw/data.csv', sep=';')
+df = pd.read_csv(HERE / 'raw' / 'data.csv', sep=';')
 
 df = df[['CD_MUNICIPIO', 'CD_OPERADORA', 'ID_PLANO']].groupby(['CD_MUNICIPIO', 'CD_OPERADORA']).count().reset_index()
 

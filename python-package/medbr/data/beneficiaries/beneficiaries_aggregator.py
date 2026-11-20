@@ -1,16 +1,14 @@
-import os
+from pathlib import Path
 import pandas as pd
 
-agg_file = 'medbr/data/beneficiaries/transformed/beneficiaries.csv'
+HERE = Path(__file__).resolve().parent
+agg_file = HERE / 'transformed' / 'beneficiaries.csv'
+agg_file.parent.mkdir(exist_ok=True)
 
-df = pd.concat([
-    pd.read_csv('medbr/data/beneficiaries/raw/tb_br_2209.csv', sep=';'),
-    pd.read_csv('medbr/data/beneficiaries/raw/tb_br_2212.csv', sep=';'),
-    pd.read_csv('medbr/data/beneficiaries/raw/tb_br_2303.csv', sep=';'),
-    pd.read_csv('medbr/data/beneficiaries/raw/tb_br_2306.csv', sep=';')
-])
+files = ['tb_br_2209.csv', 'tb_br_2212.csv', 'tb_br_2303.csv', 'tb_br_2306.csv']
+df = pd.concat([pd.read_csv(HERE / 'raw' / f, sep=';') for f in files])
 
-df = df[['SG_UF', 'NR_BENEF_T']].groupby(['SG_UF']).sum('NR_BENEF_T').reset_index()
+df = df[['SG_UF', 'NR_BENEF_T']].groupby(['SG_UF']).sum().reset_index()
 
 df = df.rename(columns={
     "SG_UF": "uf",

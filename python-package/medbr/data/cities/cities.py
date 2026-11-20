@@ -1,9 +1,11 @@
-import os
+from pathlib import Path
 import geopandas as gpd
 
-agg_file = 'medbr/data/cities/transformed/cities.shp'
+HERE = Path(__file__).resolve().parent
+agg_file = HERE / 'transformed' / 'cities.shp'
+agg_file.parent.mkdir(exist_ok=True)
 
-df = gpd.read_file('medbr/data/cities/raw/BR_Municipios_2022.shp')
+df = gpd.read_file(HERE / 'raw' / 'BR_Municipios_2022.shp')
 
 df['CD_MUN_CO'] = df.CD_MUN.str[:-1]
 

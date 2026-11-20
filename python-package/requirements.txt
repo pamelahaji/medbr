@@ -2,3 +2,5 @@ folium
 pandas
 geopandas
 numpy
+requests
+branca
