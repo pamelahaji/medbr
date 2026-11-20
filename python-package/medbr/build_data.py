@@ -27,6 +27,7 @@ from pathlib import Path
 import pandas as pd
 import requests
 
+from medbr.registry import REGISTRY, dataset
 from medbr.utils import data_dir, data_path
 
 IBGE_MESH_URL = (
@@ -45,7 +46,6 @@ SINASC_URL = S3 + "/SINASC/csv/SINASC_{year}_csv.zip"
 BEDS_URL = S3 + "/Leitos_SUS/Leitos_{year}.csv"
 YEARS = (2021, 2022)
 BEDS_YEAR = 2023
-DATASETS = ["cities", "population", "beneficiaries", "plancoverage", "mortality", "birth", "beds"]
 
 
 def download(url, dest, timeout=600):
@@ -203,55 +203,81 @@ def _from_yearly_zips(url_template, summarize, date_col, count_col, tmp):
     return combine_daily(frames, date_col, count_col)
 
 
+# ---------------------------------------------------------------- builders (registered)
+@dataset("cities", "IBGE municipal mesh 2022 (simplified) and the states file")
+def build_cities_dataset(tmp, simplify):
+    print("cities: downloading IBGE mesh ...", flush=True)
+    print("  ->", build_cities(download(IBGE_MESH_URL, tmp / "mesh.zip"), simplify))
+
+
+@dataset("population", "Resident population, Census 2022 (IBGE SIDRA)")
+def build_population_dataset(tmp, simplify):
+    from medbr.population import population
+
+    print("population: IBGE SIDRA ...", flush=True)
+    for level in ("uf", "city"):
+        path = data_path("population", "transformed", f"population_{level}.csv")
+        if path.exists():
+            path.unlink()  # refresh
+        print(f"  -> {level}: {len(population(level))} rows")
+
+
+@dataset("beneficiaries", "Supplementary health beneficiaries by state, latest quarter (ANS)")
+def build_beneficiaries_dataset(tmp, simplify):
+    print("beneficiaries: ANS ...", flush=True)
+    path, snapshot = build_beneficiaries(download(ANS_BENEFICIARIES_URL, tmp / "benef.zip"))
+    print("  ->", path, f"(snapshot {snapshot})")
+
+
+@dataset("plancoverage", "Health plans sold by municipality (ANS, ~1 GB download)")
+def build_plancoverage_dataset(tmp, simplify):
+    print("plancoverage: ANS (large file) ...", flush=True)
+    print("  ->", build_plancoverage(download(ANS_PLANS_URL, tmp / "plans.csv", timeout=1800)))
+
+
+@dataset("mortality", "Non-fetal deaths by municipality and day, 2021-2022 (SIM)")
+def build_mortality_dataset(tmp, simplify):
+    print("mortality: SIM (large files) ...", flush=True)
+    df = _from_yearly_zips(SIM_URL, summarize_deaths, "death_date", "death_count", tmp)
+    print("  ->", _write_csv(df, "mortality", "transformed", "mortality.csv"), f"({int(df.death_count.sum())} deaths)")
+
+
+@dataset("birth", "Births by municipality and day, 2021-2022 (SINASC)")
+def build_birth_dataset(tmp, simplify):
+    print("birth: SINASC (large files) ...", flush=True)
+    df = _from_yearly_zips(SINASC_URL, summarize_births, "birth_date", "birth_count", tmp)
+    print("  ->", _write_csv(df, "birth", "transformed", "birth.csv"), f"({int(df.birth_count.sum())} births)")
+
+
+@dataset("beds", "Existing hospital beds by state, latest month of 2023 (CNES)")
+def build_beds_dataset(tmp, simplify):
+    print("beds: CNES ...", flush=True)
+    df, month = summarize_beds(download(BEDS_URL.format(year=BEDS_YEAR), tmp / "beds.csv"))
+    print("  ->", _write_csv(df, "beds", "transformed", "beds.csv"), f"(month {month}, {int(df.beds_count.sum())} beds)")
+
+
 # ---------------------------------------------------------------- driver
 def build_all(only=None, bundle=None, simplify=CITY_SIMPLIFY):
-    from medbr.population import population
     from medbr.bundle import build_bundle
 
-    wanted = only or DATASETS
-    unknown = set(wanted) - set(DATASETS)
+    wanted = list(only) if only else list(REGISTRY)
+    unknown = set(wanted) - set(REGISTRY)
     if unknown:
-        raise ValueError(f"Unknown data set(s): {sorted(unknown)}; choose from {DATASETS}")
+        raise ValueError(f"Unknown data set(s): {sorted(unknown)}; choose from {list(REGISTRY)}")
     data_dir().mkdir(parents=True, exist_ok=True)
-
     with tempfile.TemporaryDirectory() as tmp:
-        tmp = Path(tmp)
-        if "cities" in wanted:
-            print("cities: downloading IBGE mesh ...", flush=True)
-            print("  ->", build_cities(download(IBGE_MESH_URL, tmp / "mesh.zip"), simplify))
-        if "population" in wanted:
-            print("population: IBGE SIDRA ...", flush=True)
-            for level in ("uf", "city"):
-                path = data_path("population", "transformed", f"population_{level}.csv")
-                if path.exists():
-                    path.unlink()  # refresh
-                print(f"  -> {level}: {len(population(level))} rows")
-        if "beneficiaries" in wanted:
-            print("beneficiaries: ANS ...", flush=True)
-            path, snapshot = build_beneficiaries(download(ANS_BENEFICIARIES_URL, tmp / "benef.zip"))
-            print("  ->", path, f"(snapshot {snapshot})")
-        if "plancoverage" in wanted:
-            print("plancoverage: ANS (large file) ...", flush=True)
-            print("  ->", build_plancoverage(download(ANS_PLANS_URL, tmp / "plans.csv", timeout=1800)))
-        if "mortality" in wanted:
-            print("mortality: SIM (large files) ...", flush=True)
-            df = _from_yearly_zips(SIM_URL, summarize_deaths, "death_date", "death_count", tmp)
-            print("  ->", _write_csv(df, "mortality", "transformed", "mortality.csv"), f"({int(df.death_count.sum())} deaths)")
-        if "birth" in wanted:
-            print("birth: SINASC (large files) ...", flush=True)
-            df = _from_yearly_zips(SINASC_URL, summarize_births, "birth_date", "birth_count", tmp)
-            print("  ->", _write_csv(df, "birth", "transformed", "birth.csv"), f"({int(df.birth_count.sum())} births)")
-        if "beds" in wanted:
-            print("beds: CNES ...", flush=True)
-            df, month = summarize_beds(download(BEDS_URL.format(year=BEDS_YEAR), tmp / "beds.csv"))
-            print("  ->", _write_csv(df, "beds", "transformed", "beds.csv"), f"(month {month}, {int(df.beds_count.sum())} beds)")
+        for name in wanted:  # registration order: cities and population come first
+            REGISTRY[name][0](Path(tmp), simplify)
     if bundle:
         print("bundle ->", build_bundle(bundle))
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--only", nargs="+", choices=DATASETS)
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="data sets: " + "; ".join(f"{k} ({v[1]})" for k, v in REGISTRY.items()),
+    )
+    parser.add_argument("--only", nargs="+", choices=list(REGISTRY))
     parser.add_argument("--bundle", help="also write the zip that medbr downloads (e.g. medbr-data.zip)")
     parser.add_argument("--simplify", type=float, default=CITY_SIMPLIFY)
     args = parser.parse_args()

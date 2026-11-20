@@ -40,14 +40,10 @@ jobs:
           import os, medbr
           from medbr.utils import read_data
           m = read_data("mortality","transformed","mortality.csv"); b = read_data("birth","transformed","birth.csv"); s = read_data("beds","transformed","beds.csv")
-          print("SANITY deaths total:", int(m.death_count.sum()), "rows:", len(m), "dates:", m.death_date.min(), m.death_date.max(), "cities:", m.city_code.nunique())
-          print("SANITY births total:", int(b.birth_count.sum()), "rows:", len(b), "dates:", b.birth_date.min(), b.birth_date.max(), "cities:", b.city_code.nunique())
-          print("SANITY deaths 2021:", int(m[m.death_date.str.startswith("2021")].death_count.sum()), " 2022:", int(m[m.death_date.str.startswith("2022")].death_count.sum()))
-          print("SANITY births 2021:", int(b[b.birth_date.str.startswith("2021")].birth_count.sum()), " 2022:", int(b[b.birth_date.str.startswith("2022")].birth_count.sum()))
-          print("SANITY beds total:", int(s.beds_count.sum()), s.set_index("uf").beds_count.sort_values().tail(3).to_dict())
-          for name, fn in [("beds", lambda: medbr.beds()), ("beds rate", lambda: medbr.beds(rate=True)),
+          print("SANITY deaths:", int(m.death_count.sum()), "births:", int(b.birth_count.sum()), "beds:", int(s.beds_count.sum()))
+          for name, fn in [("beds", lambda: medbr.beds()), ("beds rate SP", lambda: medbr.beds(ufs=["SP"], rate=True)),
                            ("mortality SP month", lambda: medbr.mortality(ufs=["SP"], start_at="2021-03-01", end_at="2021-03-31")),
-                           ("mortality SP month rate", lambda: medbr.mortality(ufs=["SP"], start_at="2021-03-01", end_at="2021-03-31", rate=True)),
-                           ("birth capital year", lambda: medbr.birth(cities_code=[355030], start_at="2022-01-01", end_at="2022-12-31"))]:
-              mp = fn(); mp.save("/tmp/x.html"); print("MAP", name, round(os.path.getsize("/tmp/x.html")/1e6,1), "MB")
+                           ("birth capital", lambda: medbr.birth(cities_code=[355030], start_at="2022-01-01", end_at="2022-12-31", rate=True))]:
+              mp = fn(); mp.save("/tmp/x.html"); print("MAP", name, round(os.path.getsize("/tmp/x.html")/1e6,2), "MB")
+          print("DOC", medbr.beds.__doc__.splitlines()[0])
           PY

@@ -15,17 +15,15 @@ from pathlib import Path
 
 from medbr.utils import data_dir
 
-DATASETS = ["beds", "beneficiaries", "birth", "mortality", "plancoverage", "population"]
-
 
 def collect_files(root):
+    """Every ``<dataset>/transformed/*`` file (new data sets are included automatically)
+    plus the states file; ``raw`` folders are never shipped."""
     root = Path(root)
-    files = [p for p in (root / "cities" / "transformed").glob("cities.*")]
+    files = [p for p in root.glob("*/transformed/*") if p.is_file() and not p.name.startswith(".")]
     states = root / "cities" / "raw" / "br_states.json"
     if states.exists():
         files.append(states)
-    for name in DATASETS:
-        files += list((root / name / "transformed").glob("*.csv"))
     return sorted(files)
 
 

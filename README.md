@@ -105,6 +105,10 @@ More examples in [`python-package/examples/run_all.py`](python-package/examples/
 
 Under development (not exported yet): COVID-19 vaccination (`covid_vaccine`) and sanitation (`sanitation`).
 
+# Adding data sets
+
+The package is built to grow: a data set is a registered *builder* (download + prepare), one line to get its map function (`uf_choropleth`, `city_choropleth`, `daily_heatmap`) and a test. `python -m medbr.build_data` and the release bundle pick it up automatically. See the [guide](CONTRIBUTING.md).
+
 # Contributing to medbr
 If you would like to contribute to medbr and add new functions or data sets, please check the [guide](CONTRIBUTING.md) to propose your contribution.
 

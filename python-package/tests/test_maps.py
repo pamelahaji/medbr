@@ -53,7 +53,7 @@ def data_dir(tmp_path, monkeypatch):
     lambda: medbr.plancoverage(rate=True),
     lambda: medbr.birth(rate=True),
     lambda: medbr.birth(ufs=["SP"]),
-    lambda: medbr.mortality(ufs="RJ", rate=True),
+    lambda: medbr.mortality(ufs="SP", rate=True),
     lambda: medbr.mortality(rate=True),
     lambda: medbr.beneficiaries(),
     lambda: medbr.plancoverage(),
