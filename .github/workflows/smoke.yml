@@ -6,16 +6,11 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Inspect ANS and IBGE files
+      - name: Peek ANS aggregated files
         run: |
           B=https://dadosabertos.ans.gov.br/FTP/PDA
-          ls_() { echo "== LIST $1"; curl -sL --max-time 60 "$1" | grep -o 'href="[^"?/][^"?]*"' | head -${2:-40}; }
-          ls_ $B/informacoes_consolidadas_de_beneficiarios-024/202609/ 40
-          ls_ $B/informacoes_consolidadas_de_beneficiarios-024/dicionario/ 10
-          ls_ $B/area_comercializacao_planos_ntrp/ 20
-          ls_ $B/dados_de_beneficiarios_por_regiao_geografica/ 20
-          ls_ $B/caracteristicas_produtos_saude_suplementar-008/ 20
-          peek() { echo "== PEEK $1"; mkdir -p /tmp/p && cd /tmp/p && rm -rf * && curl -sL --max-time 120 -o f "$1"; ls -l f | awk '{print "size", $5}'; file f | cut -c1-80; (unzip -l f 2>/dev/null | tail -6); for c in $(unzip -Z1 f 2>/dev/null | head -1); do unzip -p f "$c" | head -3 | cut -c1-400; done; cd - >/dev/null; }
-          f=$(curl -sL $B/informacoes_consolidadas_de_beneficiarios-024/202609/ | grep -o 'href="[^"?/][^"?]*"' | sed 's/href="//;s/"//' | grep -i "SP" | head -1)
-          [ -n "$f" ] && peek "$B/informacoes_consolidadas_de_beneficiarios-024/202609/$f"
-          echo "== IBGE mesh size"; curl -sL --max-time 300 -o /tmp/m.zip https://geoftp.ibge.gov.br/organizacao_do_territorio/malhas_territoriais/malhas_municipais/municipio_2022/Brasil/BR/BR_Municipios_2022.zip; ls -l /tmp/m.zip | awk '{print $5}'; unzip -l /tmp/m.zip | tail -8
+          peekcsv() { echo "== CSV $1"; curl -sL --max-time 120 -r 0-1500 "$1" | head -4 | cut -c1-500; echo "size:"; curl -sIL "$1" | grep -i content-length | tr -d '\r' | tail -1; }
+          peekcsv $B/area_comercializacao_planos_ntrp/pda_area_comer_plano_ntrp.csv
+          peekcsv $B/caracteristicas_produtos_saude_suplementar-008/pda-008-caracteristicas_produtos_saude_suplementar.csv
+          peekcsv $B/caracteristicas_produtos_saude_suplementar-008/pda-008-tabela_auxiliar_de_detalhamento_de_municipios.csv
+          echo "== ZIP benef_regiao_geog"; mkdir -p /tmp/p && cd /tmp/p && curl -sL --max-time 200 -o f $B/dados_de_beneficiarios_por_regiao_geografica/benef_regiao_geog.zip; ls -l f | awk '{print "size", $5}'; unzip -l f | tail -5; c=$(unzip -Z1 f | head -1); unzip -p f "$c" | head -4 | cut -c1-500; echo "rows:"; unzip -p f "$c" | wc -l
