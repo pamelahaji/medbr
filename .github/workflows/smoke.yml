@@ -3,25 +3,20 @@ on:
   push:
     branches: [test/smoke]
 jobs:
-  smoke:
+  probe:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/setup-python@v5
-        with: {python-version: "3.12"}
-      - name: Clean install from main
-        run: pip install "git+https://github.com/pamelahaji/medbr.git@main#subdirectory=python-package"
-      - name: Live checks
+      - name: Probe official URLs
         run: |
-          python - <<'PY'
-          import traceback, medbr
-          from medbr.population import population
-          def run(name, fn):
-              try:
-                  r = fn(); print("OK  ", name, r if not hasattr(r, "get_root") else "map")
-              except Exception as e:
-                  print("FAIL", name, type(e).__name__, str(e)[:300])
-          run("population uf", lambda: len(population("uf")))
-          run("population city", lambda: len(population("city")))
-          run("facilities SP", lambda: medbr.facilities(city=355030).get_root().render()[:20])
-          run("bundle (beds)", lambda: medbr.beds())
-          PY
+          probe() { echo "== $1"; curl -sIL --max-time 40 "$1" | grep -iE "^HTTP|^content-length|^content-type|^location" | tr -d '\r' | head -8; }
+          probe https://s3.sa-east-1.amazonaws.com/ckan.saude.gov.br/SIM/DO21OPEN.csv
+          probe https://s3.sa-east-1.amazonaws.com/ckan.saude.gov.br/SIM/DO22OPEN.csv
+          probe https://s3.sa-east-1.amazonaws.com/ckan.saude.gov.br/SINASC/DN21OPEN.csv
+          probe https://s3.sa-east-1.amazonaws.com/ckan.saude.gov.br/SINASC/DN22OPEN.csv
+          probe https://geoftp.ibge.gov.br/organizacao_do_territorio/malhas_territoriais/malhas_municipais/municipio_2022/Brasil/BR/BR_Municipios_2022.zip
+          probe "https://servicodados.ibge.gov.br/api/v3/malhas/paises/BR?intrarregiao=municipio&formato=application/vnd.geo+json&qualidade=minima"
+          probe "https://servicodados.ibge.gov.br/api/v3/malhas/paises/BR?intrarregiao=UF&formato=application/vnd.geo+json&qualidade=minima"
+          probe https://servicodados.ibge.gov.br/api/v1/localidades/municipios
+          echo "== ANS PDA listing"; curl -sL --max-time 40 https://dadosabertos.ans.gov.br/FTP/PDA/ | grep -o 'href="[^"?]*"' | head -40
+          echo "== ANS beneficiarios listing"; curl -sL --max-time 40 https://dadosabertos.ans.gov.br/FTP/PDA/informacoes_consolidadas_de_beneficiarios-024/ | grep -o 'href="[^"?]*"' | tail -15
+          echo "== opendatasus ckan API"; curl -sL --max-time 40 "https://opendatasus.saude.gov.br/api/3/action/package_search?q=hospitais%20leitos&rows=5" | head -c 1500
